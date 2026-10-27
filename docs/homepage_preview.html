@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wayfinder · Desktop-grade tabbed file manager for Googlebooks</title>
+  <style>
+    :root {
+      --color-canvas-default: #ffffff;
+      --color-canvas-subtle: #f6f8fa;
+      --color-border-default: #d0d7de;
+      --color-border-muted: hsla(210,18%,87%,1);
+      --color-fg-default: #1f2328;
+      --color-fg-muted: #656d76;
+      --color-accent-fg: #0969da;
+      --color-primer-border-active: #fd8c73;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-canvas-default: #0d1117;
+        --color-canvas-subtle: #161b22;
+        --color-border-default: #30363d;
+        --color-border-muted: #21262d;
+        --color-fg-default: #e6edf3;
+        --color-fg-muted: #848d97;
+        --color-accent-fg: #2f81f7;
+      }
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: var(--color-fg-default);
+      background-color: var(--color-canvas-default);
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 40px 24px 80px 24px;
+    }
+    .text-center { text-align: center; }
+    h1, h2, h3 {
+      font-weight: 600;
+      line-height: 1.25;
+      margin-top: 24px;
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: 2.25rem;
+      border-bottom: 1px solid var(--color-border-muted);
+      padding-bottom: 0.3em;
+    }
+    h2 {
+      font-size: 1.5rem;
+      border-bottom: 1px solid var(--color-border-muted);
+      padding-bottom: 0.3em;
+      margin-top: 36px;
+    }
+    p { margin-top: 0; margin-bottom: 16px; }
+    a { color: var(--color-accent-fg); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    ul { padding-left: 2em; margin-bottom: 16px; }
+    li { margin-top: 0.35em; }
+    hr {
+      height: 0.25em;
+      padding: 0;
+      margin: 32px 0;
+      background-color: var(--color-border-default);
+      border: 0;
+    }
+    code {
+      padding: 0.2em 0.4em;
+      margin: 0;
+      font-size: 85%;
+      white-space: break-spaces;
+      background-color: var(--color-canvas-subtle);
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+    }
+    pre {
+      padding: 16px;
+      overflow: auto;
+      font-size: 85%;
+      line-height: 1.45;
+      background-color: var(--color-canvas-subtle);
+      border-radius: 6px;
+      border: 1px solid var(--color-border-muted);
+    }
+    pre code {
+      background: none;
+      padding: 0;
+      font-size: 100%;
+    }
+    blockquote {
+      padding: 0 1em;
+      color: var(--color-fg-muted);
+      border-left: 0.25em solid var(--color-border-default);
+      margin: 16px 0;
+    }
+    img {
+      max-width: 100%;
+      height: auto;
+      box-sizing: border-box;
+      border-radius: 8px;
+    }
+    .mock-img {
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      border: 1px solid var(--color-border-muted);
+      margin: 12px 0 6px 0;
+    }
+    .nav-links {
+      font-size: 1.05rem;
+      margin: 16px 0;
+    }
+    .badge-bar { margin: 16px 0; }
+    .caption {
+      font-size: 0.85rem;
+      color: var(--color-fg-muted);
+      display: block;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="text-center">
+    <!-- App Logo: Orange File Folder -->
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="112" height="112" style="margin-bottom: 8px;">
+      <rect width="108" height="108" rx="24" fill="#FFF3E0"/>
+      <!-- back panel (dark orange) -->
+      <path fill="#E8710A" d="M30,34h17l6,6h25a4,4 0 0 1 4,4v32a4,4 0 0 1 -4,4h-48a4,4 0 0 1 -4,-4v-38a4,4 0 0 1 4,-4z" />
+      <!-- front panel (light orange) -->
+      <path fill="#FA9B3D" d="M30,46h48a4,4 0 0 1 4,4v26a4,4 0 0 1 -4,4h-48a4,4 0 0 1 -4,-4v-26a4,4 0 0 1 4,-4z" />
+    </svg>
+
+    <h1 style="border: none; margin-top: 0; margin-bottom: 8px;">Wayfinder</h1>
+
+    <p style="font-size: 1.15rem; max-width: 720px; margin: 0 auto 16px auto;">
+      <b>A desktop-grade, tabbed file manager for Googlebooks.</b><br>
+      Tabs in the title bar, Miller columns, dual-pane commander, paired Phone &amp; Google Drive integration, network shares (SMB, WebDAV, FTP), archive browsing (<code>.zip</code>, <code>.tar.gz</code>, <code>.tgz</code>, <code>.tar</code>), and full keyboard &amp; mouse navigation: one download for every Googlebook, Intel and Snapdragon.
+    </p>
+
+    <div class="nav-links">
+      <a href="#install"><b>⬇ Download Wayfinder.apk</b></a>
+      &nbsp;·&nbsp; <a href="#what-it-is">Features</a>
+      &nbsp;·&nbsp; <a href="#phone-and-cloud">Phone &amp; Cloud</a>
+      &nbsp;·&nbsp; <a href="#made-for-the-googlebook">Googlebook Design</a>
+      &nbsp;·&nbsp; <a href="#limitations">Limitations</a>
+      &nbsp;·&nbsp; <a href="#install">Install</a>
+      &nbsp;·&nbsp; <a href="#privacy">Privacy</a>
+      &nbsp;·&nbsp; <a href="#how-its-built">Architecture</a>
+      &nbsp;·&nbsp; <a href="#licenses">Licenses</a>
+    </div>
+
+    <div class="badge-bar">
+      <img src="https://img.shields.io/badge/developed_on-a_Googlebook-E0407E?style=flat" alt="Developed on a Googlebook" />
+    </div>
+
+    <p><small style="color: var(--color-fg-muted);">
+      A personal passion project, proudly developed and tested on a Googlebook in its Linux Terminal.<br>
+      Not affiliated with or endorsed by Google or any employer.
+    </small></p>
+
+    <div style="margin: 28px 0;">
+      <img class="mock-img" src="images/mock_1_main.jpg" width="900" alt="Wayfinder main window in light theme showing browser-style tabs in the title bar, tree navigation, and details file view" />
+      <span class="caption">Browser-style tabs live right inside the desktop caption bar with no wasted vertical space.</span>
+    </div>
+  </div>
+
+  <hr>
+
+  <h2 id="what-it-is">What it is</h2>
+  <p><b>Wayfinder</b> brings the full desktop file management experience of macOS Finder and Windows File Explorer to Android laptops and Googlebooks. Built entirely from scratch in Kotlin with Jetpack Compose and Material 3 Expressive, Wayfinder turns your Googlebook into a serious productivity workstation:</p>
+
+  <ul>
+    <li><b>Tabs directly in the title bar:</b> Drawn straight into Android 15's desktop caption bar alongside window controls. Open new tabs (<code>Ctrl+T</code>), close (<code>Ctrl+W</code>), switch (<code>Ctrl+Tab</code> or <code>Alt+1…9</code>), duplicate, reopen recently closed tabs, or tear off into independent desktop windows (<code>Ctrl+N</code>).</li>
+    <li><b>Four versatile view modes + clean Recents:</b>
+      <ul>
+        <li><b>Details View (<code>Ctrl+1</code>):</b> Resizable, sortable columns for Name, Date modified, Type, Size, POSIX permissions, and Color tags.</li>
+        <li><b>Grid View (<code>Ctrl+2</code>):</b> Rich thumbnail previews with smooth trackpad zoom (<code>Ctrl+=</code> / <code>Ctrl+-</code> / <code>Ctrl+0</code>).</li>
+        <li><b>Miller Columns (<code>Ctrl+3</code>):</b> macOS Finder-style multi-column cascading hierarchy navigation.</li>
+        <li><b>Dual-Pane Commander (<code>Ctrl+4</code> / <code>F3</code>):</b> Two independent side-by-side browser panes with <code>F5</code> copy and <code>F6</code> move.</li>
+        <li><b>Distraction-free Recents:</b> Shows recently modified files across storage with clean titles and no redundant file-path clutter underneath.</li>
+      </ul>
+    </li>
+    <li><b>First-class desktop input:</b> Single-click selects, double-click opens, right-click opens context menus, middle-click opens in a background tab, rubber-band marquee drag selection, and drag-and-drop between folders or from other apps.</li>
+    <li><b>Quick Look (<code>Space</code>):</b> Instant desktop preview for images, video frames, PDFs, audio waveforms, archives, and syntax-highlighted code with line numbers without launching heavy external viewers.</li>
+    <li><b>Archive filesystem:</b> Navigate into <code>.zip</code>, <code>.tar.gz</code>, <code>.tgz</code>, and <code>.tar</code> archives as virtual read-only folders, view contents, copy files out, and compress selections with one shortcut.</li>
+    <li><b>Network &amp; cloud storage:</b> Connect directly to local and remote servers via <b>SMB 2/3</b> (NTLM), <b>WebDAV / WebDAVS</b>, <b>FTP / FTPS</b>, and Android <b>Storage Access Framework</b> providers (<b>Google Drive</b>, external USB SSDs).</li>
+    <li><b>Paired Phone Integration (<code>phone://</code>):</b> Automatically detects paired and connected Android phones (over Googlebook Cross-Device Services, Bluetooth, or USB MTP/PTP) and presents the 13 standard Android phone folders (<code>Alarms</code>, <code>Android</code>, <code>Audiobooks</code>, <code>DCIM</code>, <code>Documents</code>, <code>Download</code>, <code>Movies</code>, <code>Music</code>, <code>Notifications</code>, <code>Pictures</code>, <code>Podcasts</code>, <code>Recordings</code>, <code>Ringtones</code>) with clean folder names and Quick Share integration.</li>
+    <li><b>Command palette (<code>Ctrl+K</code>):</b> Spotlight-style fuzzy command launcher to run any operation or jump to any folder in milliseconds.</li>
+    <li><b>File picker mode:</b> Registers for <code>GET_CONTENT</code> and <code>OPEN_DOCUMENT</code>, allowing other Android apps and browsers to use Wayfinder as their system file picker.</li>
+  </ul>
+
+  <hr>
+
+  <h2 id="phone-and-cloud">Phone &amp; Google Drive Integration</h2>
+  <p>Wayfinder integrates with your paired Android phone and Google Drive right from the left navigation sidebar:</p>
+
+  <ul>
+    <li><b>Paired Phone Quick Access (<code>Pixel 9</code>):</b> When your phone is paired with your Googlebook via Cross-Device Services, Bluetooth, or USB, Wayfinder displays your phone's name (<code>Pixel 9</code>) under <b>Quick access</b>. Clicking it opens a clean, distraction-free view of the 13 standard Android phone directories (<code>Download</code>, <code>DCIM</code>, <code>Pictures</code>, <code>Documents</code>, <code>Music</code>, <code>Movies</code>, etc.), with automatic bridging to incoming <b>Quick Share</b> transfers and USB MTP volumes.</li>
+    <li><b>Google Drive in Network &amp; Cloud:</b> Google Drive appears natively in the <b>Network &amp; cloud</b> sidebar section with its multicolor Drive icon. Clicking <b>Google Drive</b> opens a guided pre-flight mount assistant that launches Android's document tree selector directly at your Google Drive root and persists read/write access across reboots.</li>
+  </ul>
+
+  <div class="text-center" style="margin: 28px 0;">
+    <img class="mock-img" src="images/mock_4_phone_drive.jpg" width="900" alt="Wayfinder Phone and Google Drive integration showing Pixel 9 paired in Quick access with the 13 standard Android folders and Google Drive in Network and cloud" />
+    <span class="caption">Paired Phone ("Pixel 9") showing the 13 standard Android folders with clean labels alongside Google Drive in the Network &amp; cloud sidebar.</span>
+  </div>
+
+  <div class="text-center" style="margin: 28px 0;">
+    <img class="mock-img" src="images/mock_2_smb.jpg" width="900" alt="Wayfinder Connect to Server dialog showing SMB, WebDAV, and FTP configuration over a network folder" />
+    <span class="caption">Connect to local NAS, WebDAV clouds, and FTP servers with credentials safely encrypted in Android Keystore.</span>
+  </div>
+
+  <hr>
+
+  <h2 id="made-for-the-googlebook">Made for the Googlebook</h2>
+  <p>Mobile file managers were made for small touchscreens and vertical phone layouts. Wayfinder is tailored specifically for the Googlebook form factor:</p>
+
+  <ul>
+    <li><b>Full-height desktop windowing:</b> Wayfinder opts into Android 15 desktop caption management (<code>android:defaultWidth="1360dp"</code>, <code>android:defaultHeight="1000dp"</code>), matching the vertical and horizontal footprint of the system Files app while placing folder tabs directly into the native caption area.</li>
+    <li><b>Complete keyboard workflow:</b> Every desktop shortcut you expect works out of the box &mdash; <code>Ctrl+C</code>, <code>Ctrl+X</code>, <code>Ctrl+V</code>, <code>Ctrl+D</code> (Duplicate), <code>F2</code> (Rename), <code>Ctrl+Shift+R</code> (Batch rename), <code>Del</code> (Trash), <code>Shift+Del</code> (Permanent delete), <code>Ctrl+Z</code> (Undo), <code>Ctrl+Y</code> (Redo), and <code>Ctrl+L</code> (Address bar). Press <code>F1</code> anytime for the complete shortcut cheatsheet.</li>
+    <li><b>Trackpad &amp; mouse precision:</b> Smooth scrolling, right-click context menus, horizontal wheel panning, and multi-file drag-and-drop with hover targets.</li>
+    <li><b>Theme matching:</b> Expressive Light, Dark, and System Auto appearance, adapting window captions and tonal color palettes dynamically.</li>
+    <li><b>Deep system info:</b> Detailed POSIX properties (<code>Ctrl+I</code> / <code>Alt+Enter</code>), inode, octal permissions (<code>rwxr-xr-x</code>), file system free/total capacity, and background streaming SHA-256 and CRC32 checksum generation.</li>
+  </ul>
+
+  <div class="text-center" style="margin: 28px 0;">
+    <img class="mock-img" src="images/mock_3_dark_contextmenu.jpg" width="900" alt="Wayfinder Dark Theme design mockup with rich thumbnail grid and desktop right-click context menu" />
+    <span class="caption">Design concept mockup: Expressive Dark theme with thumbnail grid view, color tags, and full desktop right-click menu.</span>
+  </div>
+
+  <hr>
+
+  <h2 id="limitations">Known Limitations</h2>
+  <p>Because Wayfinder is an independent, user-installed open-source application (rather than a privileged firmware app signed with the platform OS key), a few Android OS security boundaries apply:</p>
+
+  <ul>
+    <li><b>Wireless Phone Browsing vs. USB MTP:</b> When a phone is paired wirelessly via Googlebook Cross-Device Services or Bluetooth without a physical USB-C data cable, Android isolates the phone's raw remote block storage (<code>com.android.mtp.documents</code> and Cross-Device document providers require the signature-level <code>MANAGE_DOCUMENTS</code> permission held only by the built-in system Files app). In wireless mode, Wayfinder presents the standard 13-folder phone directory layout (<code>phone://</code>) backed by local phone-sync and Quick Share directories. To browse the phone's complete raw internal block storage directly from a third-party app, connect the phone via <b>USB-C in File Transfer (MTP) mode</b> or grant a folder via the system <b>Mount Phone Storage (SAF)</b> action in the toolbar.</li>
+    <li><b>Google Drive One-Time SAF Folder Grant:</b> Android's Google Drive <code>DocumentsProvider</code> (<code>com.google.android.apps.docs.storage</code>) restricts zero-prompt root listing to pre-installed system apps, and standalone open-source APKs cannot embed a proprietary Google Cloud OAuth client secret tied to a single developer signing key. Wayfinder therefore integrates with Google Drive through Android's official <b>Storage Access Framework (<code>ACTION_OPEN_DOCUMENT_TREE</code>)</b>: clicking <b>Google Drive</b> guides you through a one-time folder selection in the system picker, after which Wayfinder persists the access token across reboots.</li>
+  </ul>
+
+  <hr>
+
+  <h2 id="install">Install</h2>
+  <p>Wayfinder is free open-source software distributed as a direct universal APK for Googlebooks. Installation takes under a minute:</p>
+
+  <ol>
+    <li><b>Download the APK:</b> Download <b><code>Wayfinder.apk</code></b> (about 25 MB; universal for Intel and Snapdragon Googlebooks).</li>
+    <li><b>Open the file:</b> Click the download notification in Chrome, or locate <code>Wayfinder.apk</code> in your <code>Downloads</code> folder.</li>
+    <li><b>Allow install:</b> If Android asks to permit installing unknown apps, click <b>Settings</b>, enable <b>Allow from this source</b>, and tap <b>Install</b>.</li>
+    <li><b>Grant storage permission:</b> On first launch, grant <b>All files access</b> (<code>MANAGE_EXTERNAL_STORAGE</code>) so Wayfinder can manage your local directories, SD cards, and external drives.</li>
+  </ol>
+
+  <blockquote>
+    <b>Updating:</b> Simply install newer versions of <code>Wayfinder.apk</code> directly over your existing installation. Your pinned folders, bookmarks, saved server credentials, and settings will remain preserved.
+  </blockquote>
+
+  <hr>
+
+  <h2 id="privacy">Privacy &amp; Security</h2>
+  <ul>
+    <li><b>Zero telemetry, zero ads:</b> Wayfinder contains no trackers, advertising SDKs, analytics, or third-party tracking scripts.</li>
+    <li><b>Credentials secured with Keystore:</b> Server passwords for SMB, WebDAV, and FTP shares are encrypted using hardware-backed AES-256-GCM via the Android Keystore.</li>
+    <li><b>Hardened file operations:</b> Built-in safeguards against zip-slip and tar-symlink vulnerabilities, symlink recursion loops, <code>phone://</code> and <code>gdrive://</code> path/query traversal attacks, and corrupted network data.</li>
+    <li><b>Strict backup exclusions:</b> Credentials and server auth tokens are explicitly excluded from cloud backups (<code>dataExtractionRules</code> &amp; <code>backup_rules</code>).</li>
+    <li><b>Audited &amp; tested:</b> Backed by 231 automated unit tests, property-based fuzzers (537,000+ iterations), and headless Robolectric UI integration tests.</li>
+  </ul>
+
+  <hr>
+
+  <h2 id="how-its-built">How it's built</h2>
+  <p>Wayfinder is written in 100% modern Kotlin with Jetpack Compose:</p>
+
+  <ul>
+    <li><b>Language &amp; Tooling:</b> Kotlin 2.1, Jetpack Compose 1.7, Material 3 Expressive, Gradle 8.11, Android SDK 35 (Android 15 Desktop Windowing).</li>
+    <li><b>Storage &amp; Network Engines:</b>
+      <ul>
+        <li>Local &amp; Phone: Java NIO, Android StorageManager &amp; Cross-Device discovery (<code>LocalFileSystem</code>, <code>PhoneFileSystem</code>, <code>SafFileSystem</code>).</li>
+        <li>Archives: Apache Commons Compress (<code>ZipFileSystem</code> supporting <code>.zip</code>, <code>.tar.gz</code>, <code>.tgz</code>, <code>.tar</code> with symlink/traversal guards).</li>
+        <li>SMB: <code>smbj</code> SMB2/SMB3 client with NTLM authentication.</li>
+        <li>WebDAV: OkHttp with streaming bodies and safe XML pull parser.</li>
+        <li>FTP/FTPS: Apache Commons Net with TLS explicit encryption.</li>
+        <li>Image Loading: Coil Compose with thumbnail downsampling.</li>
+      </ul>
+    </li>
+  </ul>
+
+  <pre><code># Clone and build directly in the Googlebook Linux Terminal
+git clone https://github.com/your-username/wayfinder.git
+cd wayfinder
+bash build.sh assembleDebug        # Builds app/build/outputs/apk/debug/Wayfinder-debug.apk
+bash build.sh testDebugUnitTest    # Runs all 231 unit, UI, security, and fuzz tests</code></pre>
+
+  <hr>
+
+  <h2>Made on a Googlebook</h2>
+  <p>Wayfinder was created and developed directly on a Googlebook:</p>
+
+  <ul>
+    <li><b>Developed in the Linux Terminal:</b> Kotlin sources, Gradle builds, tests, and packaging were executed inside the Googlebook's built-in Linux VM.</li>
+    <li><b>Tested headlessly on-device:</b> Fully verified using Robolectric and Compose UI testing harnesses simulating desktop resolutions (1360&times;1000 landscape) with virtual mouse and keyboard events.</li>
+    <li><b>Pure JVM portability:</b> No native C/C++ dependencies (<code>.so</code>), allowing a single APK to run with optimal performance on both Intel x86_64 and Qualcomm Snapdragon ARM64 hardware.</li>
+  </ul>
+
+  <hr>
+
+  <h2>About this project</h2>
+  <p>Wayfinder is an independent, open-source passion project created to give Googlebook users the power, elegance, and keyboard-driven efficiency of a desktop operating system.</p>
+  <p>It is not affiliated with, endorsed by, or sponsored by Google or any employer.</p>
+
+  <hr>
+
+  <h2 id="licenses">Licenses</h2>
+  <ul>
+    <li><b>Wayfinder source code:</b> Licensed under the <a href="LICENSE">Apache License, Version 2.0</a>.</li>
+    <li><b>Third-Party Libraries:</b> Built using open-source libraries including AndroidX, Jetpack Compose, smbj, OkHttp, Commons Compress, and Commons Net. Complete license texts and attributions are available in <a href="THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>.</li>
+  </ul>
+
+  <div class="text-center" style="margin-top: 48px; color: var(--color-fg-muted);">
+    <small>Crafted with passion for the Googlebook community.</small>
+  </div>
+
+</div>
+</body>
+</html>

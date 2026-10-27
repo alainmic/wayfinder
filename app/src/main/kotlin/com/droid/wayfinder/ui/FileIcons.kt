@@ -1,0 +1,155 @@
+// Copyright 2026 The Wayfinder Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package com.droid.wayfinder.ui
+
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Android
+import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.AudioFile
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Dns
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.FolderShared
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.InsertDriveFile
+import androidx.compose.material.icons.outlined.MusicNote
+import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material.icons.outlined.SdCard
+import androidx.compose.material.icons.outlined.Slideshow
+import androidx.compose.material.icons.outlined.TableChart
+import androidx.compose.material.icons.outlined.TextSnippet
+import androidx.compose.material.icons.outlined.VideoFile
+import androidx.compose.material.icons.outlined.Laptop
+import androidx.compose.material.icons.outlined.ImageSearch
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.droid.wayfinder.data.FileEntry
+import com.droid.wayfinder.data.FileKind
+import java.text.DateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+
+fun FileKind.icon(): ImageVector = when (this) {
+    FileKind.Folder -> Icons.Outlined.Folder
+    FileKind.Image -> Icons.Outlined.Image
+    FileKind.Video -> Icons.Outlined.VideoFile
+    FileKind.Audio -> Icons.Outlined.AudioFile
+    FileKind.Pdf -> Icons.Outlined.PictureAsPdf
+    FileKind.Document -> Icons.Outlined.Description
+    FileKind.Sheet -> Icons.Outlined.TableChart
+    FileKind.Slides -> Icons.Outlined.Slideshow
+    FileKind.Archive -> Icons.Outlined.Archive
+    FileKind.Code -> Icons.Outlined.Code
+    FileKind.Apk -> Icons.Outlined.Android
+    FileKind.Text -> Icons.Outlined.TextSnippet
+    FileKind.Other -> Icons.Outlined.InsertDriveFile
+}
+
+fun FileKind.tint(): Color = when (this) {
+    FileKind.Folder -> Color(0xFF5B7FD6)
+    FileKind.Image -> Color(0xFF1E8E3E)
+    FileKind.Video -> Color(0xFFC5221F)
+    FileKind.Audio -> Color(0xFF9334E6)
+    FileKind.Pdf -> Color(0xFFD93025)
+    FileKind.Document -> Color(0xFF1A73E8)
+    FileKind.Sheet -> Color(0xFF188038)
+    FileKind.Slides -> Color(0xFFE37400)
+    FileKind.Archive -> Color(0xFF8D6E00)
+    FileKind.Code -> Color(0xFF00796B)
+    FileKind.Apk -> Color(0xFF3DDC84)
+    FileKind.Text -> Color(0xFF5F6368)
+    FileKind.Other -> Color(0xFF5F6368)
+}
+
+fun FileEntry.icon(): ImageVector = when {
+    isServer -> Icons.Outlined.Dns
+    isShare -> Icons.Outlined.FolderShared
+    else -> kind.icon()
+}
+
+fun FileEntry.tint(): Color = if (isServer || isShare) Color(0xFF5B7FD6) else kind.tint()
+
+fun pinIcon(path: String): ImageVector = when (path.substringAfterLast('/').lowercase()) {
+    "download", "downloads" -> Icons.Outlined.Download
+    "documents" -> Icons.Outlined.Description
+    "pictures", "dcim" -> Icons.Outlined.Image
+    "music" -> Icons.Outlined.MusicNote
+    "movies", "videos" -> Icons.Outlined.Movie
+    else -> Icons.Outlined.Folder
+}
+
+fun rootIcon(removable: Boolean): ImageVector = if (removable) Icons.Outlined.SdCard else Icons.Outlined.Laptop
+
+private val timeFmt = DateFormat.getTimeInstance(DateFormat.SHORT)
+private val dateFmt = DateFormat.getDateInstance(DateFormat.MEDIUM)
+
+fun formatDate(ms: Long): String {
+    if (ms <= 0) return ""
+    val d = Date(ms)
+    val now = Calendar.getInstance()
+    val c = Calendar.getInstance().apply { time = d }
+    val sameYear = now.get(Calendar.YEAR) == c.get(Calendar.YEAR)
+    return if (sameYear) {
+        java.text.SimpleDateFormat("MMM d", Locale.getDefault()).format(d) + ", " + timeFmt.format(d)
+    } else dateFmt.format(d)
+}
+
+fun formatDateFull(ms: Long): String =
+    if (ms <= 0) "—" else DateFormat.getDateTimeInstance(DateFormat.LONG, DateFormat.SHORT).format(Date(ms))
+
+/**
+ * Authentic 3-color Google Drive emblem (Yellow, Green, Blue) rendered via Canvas.
+ */
+@Composable
+fun GoogleDriveIcon(modifier: Modifier = Modifier.size(20.dp)) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+
+        // Colors of Google Drive: Yellow (#FFBA00), Green (#00AC47), Blue (#0066DA)
+        val yellow = Color(0xFFFFBA00)
+        val green = Color(0xFF00AC47)
+        val blue = Color(0xFF0066DA)
+
+        // Yellow segment (left slanted)
+        val pYellow = Path().apply {
+            moveTo(w * 0.33f, h * 0.12f)
+            lineTo(w * 0.52f, h * 0.12f)
+            lineTo(w * 0.22f, h * 0.74f)
+            lineTo(w * 0.03f, h * 0.74f)
+            close()
+        }
+        drawPath(pYellow, yellow)
+
+        // Green segment (right slanted)
+        val pGreen = Path().apply {
+            moveTo(w * 0.52f, h * 0.12f)
+            lineTo(w * 0.71f, h * 0.12f)
+            lineTo(w * 0.97f, h * 0.74f)
+            lineTo(w * 0.78f, h * 0.74f)
+            close()
+        }
+        drawPath(pGreen, green)
+
+        // Blue segment (bottom horizontal)
+        val pBlue = Path().apply {
+            moveTo(w * 0.22f, h * 0.86f)
+            lineTo(w * 0.78f, h * 0.86f)
+            lineTo(w * 0.88f, h * 0.64f)
+            lineTo(w * 0.32f, h * 0.64f)
+            close()
+        }
+        drawPath(pBlue, blue)
+    }
+}

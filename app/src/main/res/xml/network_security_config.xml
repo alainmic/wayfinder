@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext HTTP stays allowed because users connect to plain dav:// (WebDAV over HTTP) servers on their LAN
+  by choice; the scheme is visible in every path. davs:// uses HTTPS with the system trust store only
+  (user-installed CAs are not trusted, so a CA pushed by another app / MDM profile can't intercept credentials).
+  FTP/FTPS and SMB don't use the platform HTTP stack and are not governed by this file.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

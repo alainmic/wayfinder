@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Locations FileProvider may serve (Open with / Share / picker results). Deliberately NOT root-path="":
+  that would let any file the app can read - including its private data (saved servers, settings) - be
+  turned into a content:// URI. Only shared storage, removable volumes and our download caches are served.
+-->
+<paths>
+    <!-- Primary shared storage (/storage/emulated/<user>). -->
+    <external-path name="external" path="." />
+    <!-- SD cards / USB volumes are mounted under /storage/<UUID>. -->
+    <root-path name="storage" path="storage" />
+    <!-- Network files downloaded for "Open", archive entries extracted for "Open", picker downloads. -->
+    <cache-path name="remote" path="remote-open/" />
+    <cache-path name="zip" path="zip-open/" />
+    <cache-path name="picker" path="picker/" />
+</paths>

@@ -74,15 +74,17 @@ private data class TreeRowData(
     val path: String, val label: String, val icon: ImageVector, val tint: Color?, val depth: Int,
     val expanded: Boolean, val loading: Boolean, val expandable: Boolean,
     val subtitle: String? = null,
+    val driveAccount: com.droid.wayfinder.data.DriveAccount? = null,
 )
 
 private fun flatten(
     path: String, label: String, icon: ImageVector, tint: Color?, depth: Int, s: AppState, out: MutableList<TreeRowData>,
     subtitle: String? = null,
+    driveAccount: com.droid.wayfinder.data.DriveAccount? = null,
 ) {
     val expanded = path in s.tree.expanded
     val kids = s.tree.children[path]
-    out += TreeRowData(path, label, icon, tint, depth, expanded, path in s.tree.loading, kids == null || kids.isNotEmpty(), subtitle)
+    out += TreeRowData(path, label, icon, tint, depth, expanded, path in s.tree.loading, kids == null || kids.isNotEmpty(), subtitle, driveAccount)
     if (expanded && kids != null) {
         kids.filter { s.showHidden || !it.isHidden }.forEach {
             flatten(it.path, it.name, if (it.isShare) Icons.Outlined.FolderShared else Icons.Outlined.Folder, null, depth + 1, s, out)
@@ -101,6 +103,18 @@ fun Sidebar(vm: BrowserViewModel, s: AppState, modifier: Modifier) {
         buildList { s.roots.forEach { flatten(it.path, it.label, rootIcon(it.removable), null, 0, s, this, it.subtitle) } }
     }
     val driveMountPaths = remember(s.driveAccounts) { s.driveAccounts.mapNotNull { it.mountPath }.toSet() }
+    val driveRows = remember(s.driveAccounts, s.tree, s.showHidden) {
+        buildList {
+            s.driveAccounts.forEach { acc ->
+                val rootPath = acc.mountPath ?: "gdrive://${acc.email}/root"
+                if (acc.isMounted && acc.mountPath != null) {
+                    flatten(acc.mountPath, "Drive", Icons.Outlined.Cloud, null, 0, s, this, acc.email, acc)
+                } else {
+                    add(TreeRowData(rootPath, "Drive", Icons.Outlined.Cloud, null, 0, false, false, false, acc.email, acc))
+                }
+            }
+        }
+    }
     // Saved servers and cloud / SAF mounts first (with eject buttons), filtering out those mapped to Drive accounts
     val mountRows = remember(s.mounts, s.tree, s.showHidden, driveMountPaths) {
         buildList {
@@ -194,32 +208,31 @@ fun Sidebar(vm: BrowserViewModel, s: AppState, modifier: Modifier) {
         }
 
         // Google Drive integration matching system Files app
-        if (s.driveAccounts.isNotEmpty()) {
-            item { Divider() }
+        item { Divider() }
+        item {
+            SectionTitle("Google Drive", trailing = {
+                HeaderAction(Icons.Outlined.AddToDrive, "Mount Google Drive folder") {
+                    if (s.driveAccounts.isEmpty()) vm.requestGoogleAccountSignIn() else vm.requestMountSaf()
+                }
+            })
+        }
+        if (driveRows.isEmpty()) {
             item {
-                SectionTitle("Google Drive", trailing = {
-                    HeaderAction(Icons.Outlined.AddToDrive, "Mount another Drive folder") { vm.requestMountSaf() }
-                })
-            }
-            items(s.driveAccounts, key = { "drive${it.email}" }) { acc ->
-                val selected = (acc.mountPath != null && (acc.mountPath == activePath || FsPath.isWithin(acc.mountPath, activePath))) ||
-                    activePath.startsWith("gdrive://${acc.email}")
-                val m = s.mounts.firstOrNull { it.path == acc.mountPath }
                 SidebarItem(
-                    label = "Drive",
+                    label = "Sign in to Google Drive…",
                     icon = Icons.Outlined.Cloud,
                     depth = 0,
-                    selected = selected,
-                    dropPath = acc.mountPath,
-                    subtitle = acc.email,
+                    selected = false,
+                    dropPath = null,
+                    subtitle = "Connect account or mount Drive folder",
                     iconComposable = { GoogleDriveIcon(Modifier.size(20.dp)) },
-                    trailing = if (acc.isMounted && m != null) ({
-                        HeaderAction(Icons.Outlined.Eject, "Unmount ${acc.email}") { vm.eject(m) }
-                    }) else null,
-                    onClick = { vm.openDriveAccount(acc) },
-                    onMiddle = { acc.mountPath?.let { vm.newTab(it, activate = false) } },
-                    onSecondary = { menu.show(it, driveAccountMenu(vm, acc, m)) },
+                    onClick = { vm.requestGoogleAccountSignIn() },
                 )
+            }
+        } else {
+            items(driveRows, key = { "drive${it.depth}${it.path}" }) { r ->
+                val mount = if (r.depth == 0) s.mounts.firstOrNull { it.path == r.path } else null
+                TreeItem(vm, s, r, activePath, menu, mount = mount)
             }
         }
         item { Divider() }
@@ -274,20 +287,40 @@ private fun HeaderAction(icon: ImageVector, desc: String, onClick: () -> Unit) {
 
 @Composable
 private fun TreeItem(vm: BrowserViewModel, s: AppState, r: TreeRowData, activePath: String, menu: MenuController, mount: Mount? = null) {
+    val driveAcc = r.driveAccount
+    val selected = when {
+        driveAcc != null && !r.expanded ->
+            (driveAcc.mountPath != null && (driveAcc.mountPath == activePath || FsPath.isWithin(driveAcc.mountPath, activePath))) ||
+                activePath.startsWith("gdrive://${driveAcc.email}")
+        else -> r.path == activePath
+    }
     SidebarItem(
-        label = r.label, icon = r.icon, depth = r.depth, selected = r.path == activePath,
+        label = r.label, icon = r.icon, depth = r.depth, selected = selected,
         dropPath = r.path.takeIf { !FsPath.isVirtual(it) && (!FsPath.isSmb(it) || FsPath.parseSmb(it).share != null) },
         subtitle = r.subtitle,
+        iconComposable = if (driveAcc != null) ({ GoogleDriveIcon(Modifier.size(20.dp)) }) else null,
         expandable = r.expandable, expanded = r.expanded, loading = r.loading, onToggle = { vm.toggleTree(r.path) },
         trailing = when {
+            driveAcc != null && driveAcc.isMounted && mount != null -> ({
+                HeaderAction(Icons.Outlined.Eject, "Unmount ${driveAcc.email}") { vm.eject(mount) }
+            })
             mount != null -> ({ HeaderAction(Icons.Outlined.Eject, if (mount.saf) "Unmount ${mount.label}" else "Disconnect ${mount.label}") { vm.eject(mount) } })
             r.path in s.pins -> ({ Icon(Icons.Filled.PushPin, "Pinned", Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) })
             else -> null
         },
-        onClick = { vm.navigate(r.path) }, onMiddle = { vm.newTab(r.path, activate = false) },
+        onClick = {
+            if (driveAcc != null) vm.openDriveAccount(driveAcc) else vm.navigate(r.path)
+        },
+        onMiddle = {
+            if (driveAcc != null) driveAcc.mountPath?.let { vm.newTab(it, activate = false) } else vm.newTab(r.path, activate = false)
+        },
         onSecondary = {
-            val base = sidebarMenu(vm, s, r.path, r.path in s.pins)
-            menu.show(it, if (mount == null) base else base + mountMenu(vm, mount))
+            if (driveAcc != null) {
+                menu.show(it, driveAccountMenu(vm, driveAcc, mount))
+            } else {
+                val base = sidebarMenu(vm, s, r.path, r.path in s.pins)
+                menu.show(it, if (mount == null) base else base + mountMenu(vm, mount))
+            }
         },
     )
 }

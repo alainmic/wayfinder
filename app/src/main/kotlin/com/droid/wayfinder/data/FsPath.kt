@@ -24,6 +24,7 @@ object FsPath {
     /** Any network or SAF location (SMB, WebDAV, FTP, cloud/document providers): not readable via java.io.File. */
     fun isRemote(p: String) = RemoteUri.schemeOf(p) != null
     fun isSaf(p: String) = p.startsWith(RemoteUri.SAF_SCHEME + "://")
+    fun isDoc(p: String) = p.startsWith(RemoteUri.DOC_SCHEME + "://")
     fun isGdrive(p: String) = p.startsWith("gdrive://")
     fun isLocal(p: String) = p.startsWith("/")
     fun isVirtual(p: String) = p == SMB_ROOT || p == TRASH_ROOT || isCollection(p) || p == PHONE_ROOT
@@ -59,6 +60,7 @@ object FsPath {
             val sub = p.removePrefix(PHONE_ROOT).split('/').filter { it.isNotEmpty() }.joinToString("/")
             if (sub.isEmpty()) PHONE_ROOT else "$PHONE_ROOT$sub"
         }
+        isDoc(p) -> p.trimEnd('/')
         isRemote(p) -> {
             val scheme = p.substringBefore("://") + "://"
             scheme + p.removePrefix(scheme).split('/').filter { it.isNotEmpty() }.joinToString("/")
@@ -74,6 +76,7 @@ object FsPath {
         p == STARRED_ROOT -> "Starred"
         p == PHONE_ROOT || (isPhone(p) && normalize(p) == PHONE_ROOT) -> "Phone"
         isPhone(p) -> normalize(p).removePrefix(PHONE_ROOT).substringAfterLast('/')
+        isDoc(p) -> SystemDocumentsBridge.displayNameOf(p) ?: normalize(p).substringAfterLast('/')
         p.startsWith(TAG_PREFIX) -> tagOf(p)?.label ?: p.removePrefix(TAG_PREFIX)
         p == "/" -> "/"
         else -> {
@@ -89,6 +92,9 @@ object FsPath {
             isPhone(n) -> {
                 val sub = n.removePrefix(PHONE_ROOT).trim('/')
                 if (!sub.contains('/')) PHONE_ROOT else "$PHONE_ROOT${sub.substringBeforeLast('/')}"
+            }
+            isDoc(n) -> {
+                SystemDocumentsBridge.parentOf(n)
             }
             isRemote(n) -> {
                 // Server / mount roots sit under the virtual "Network" location.
@@ -183,6 +189,17 @@ object FsPath {
                 }
             }
             return out
+        }
+        if (isDoc(n)) {
+            val chain = ArrayDeque<Pair<String, String>>()
+            var cur: String? = n
+            val visited = HashSet<String>()
+            while (cur != null && visited.add(cur)) {
+                val label = rootLabels[cur] ?: SystemDocumentsBridge.displayNameOf(cur) ?: name(cur)
+                chain.addFirst(label to cur)
+                cur = SystemDocumentsBridge.parentOf(cur)
+            }
+            return chain.toList()
         }
         if (isRemote(n)) {
             // Saved servers / mounts with an alias start their crumbs at the labelled root.

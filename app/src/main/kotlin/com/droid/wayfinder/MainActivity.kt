@@ -58,6 +58,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        persistIncomingTreeGrant(intent)
         prepareIntentExtras()
         // Video frame decoding for thumbnails and Quick Look.
         coil3.SingletonImageLoader.setSafe { ctx ->
@@ -147,9 +148,63 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val treeUri = persistIncomingTreeGrant(intent)
+        if (treeUri != null) {
+            vmOrNull?.mountSaf(treeUri)
+        } else {
+            vmOrNull?.refreshAll()
+        }
+    }
+
+    private fun persistIncomingTreeGrant(incoming: Intent?): Uri? {
+        if (incoming == null) return null
+        val uris = buildList {
+            incoming.data?.let { add(it) }
+            incoming.clipData?.let { clip ->
+                for (i in 0 until clip.itemCount) {
+                    clip.getItemAt(i)?.uri?.let { add(it) }
+                }
+            }
+        }
+        if (uris.isEmpty()) return null
+        val rw = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        var mountedTreeUri: Uri? = null
+        for (rawUri in uris) {
+            val auth = rawUri.authority.orEmpty()
+            val cleanUri = if (auth.contains('@')) {
+                rawUri.buildUpon().authority(auth.substringAfter('@')).build()
+            } else {
+                rawUri
+            }
+            val persisted = listOf(cleanUri, rawUri).distinct().any { candidate ->
+                runCatching {
+                    contentResolver.takePersistableUriPermission(candidate, rw)
+                    true
+                }.getOrElse {
+                    runCatching {
+                        contentResolver.takePersistableUriPermission(candidate, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        true
+                    }.getOrDefault(false)
+                }
+            }
+            val isTree = runCatching { android.provider.DocumentsContract.isTreeUri(cleanUri) }.getOrDefault(false)
+            if (persisted && isTree && !com.droid.wayfinder.data.SystemDocumentsBridge.isPhoneAuthority(cleanUri.authority)) {
+                mountedTreeUri = cleanUri
+            }
+        }
+        return mountedTreeUri
+    }
+
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        recreate()
+        if (requestCode == 1) {
+            recreate()
+        } else {
+            vmOrNull?.refreshAll()
+        }
     }
 }
 

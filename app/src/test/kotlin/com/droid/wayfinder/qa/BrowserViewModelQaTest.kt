@@ -626,4 +626,32 @@ class BrowserViewModelQaTest {
         assertEquals("folders still navigate", h.pathOf("pick/sub"), h.s.active.path)
         h.vm.cancelPick(); assertTrue(h.events.any { it is UiEvent.PickCancel })
     }
+
+    @Test fun openShareAndPickRefuseSymlinksAndPrivateAppFiles() {
+        val h = harness(mapOf(BrowserViewModel.EXTRA_PICKER to true, BrowserViewModel.EXTRA_PICKER_MIME to arrayOf("*/*")))
+        val privateSecret = File(h.app.applicationInfo.dataDir, "shared_prefs/secret.txt").apply {
+            parentFile?.mkdirs()
+            writeText("top-secret")
+        }
+        val sym = File(h.root, "sec/link.txt").apply { parentFile?.mkdirs() }
+        java.nio.file.Files.createSymbolicLink(sym.toPath(), privateSecret.toPath())
+        h.navigate(h.pathOf("sec"))
+        val entry = h.s.active.entries.first { it.name == "link.txt" }
+
+        // 1. Picker refuses symlink to private file
+        h.vm.pick(listOf(entry))
+        assertEquals("This file can't be shared", h.toasts().last())
+        assertTrue(h.events.filterIsInstance<UiEvent.PickResult>().isEmpty())
+
+        // 2. Share refuses symlink to private file
+        h.select("sec/link.txt")
+        h.vm.share()
+        assertEquals("This file can't be shared", h.toasts().last())
+        assertTrue(h.events.filterIsInstance<UiEvent.Share>().isEmpty())
+
+        // 3. Open refuses symlink to private file
+        h.vm.openWith()
+        assertEquals("This file can't be opened", h.toasts().last())
+        assertTrue(h.events.filterIsInstance<UiEvent.OpenFile>().isEmpty())
+    }
 }

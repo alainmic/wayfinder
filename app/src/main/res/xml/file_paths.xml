@@ -7,8 +7,7 @@
 <paths>
     <!-- Primary shared storage (/storage/emulated/<user>). -->
     <external-path name="external" path="." />
-    <!-- SD cards / USB volumes are mounted under /storage/<UUID>. -->
-    <root-path name="storage" path="storage" />
+    <external-files-path name="external_files" path="." />
     <!-- Network files downloaded for "Open", archive entries extracted for "Open", picker downloads. -->
     <cache-path name="remote" path="remote-open/" />
     <cache-path name="zip" path="zip-open/" />

@@ -447,6 +447,31 @@ class BrowserViewModelQaTest {
         assertEquals("D", File(h.root, "z/pics/doc.txt").readText())
     }
 
+    @Test fun extractSelectionExtractsTarGzArchives() {
+        val h = harness()
+        val dir = h.dir("tar_extract")
+        val tarGz = java.io.File(dir, "bundle.tar.gz")
+        java.io.FileOutputStream(tarGz).use { fos ->
+            org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream(fos).use { gzos ->
+                org.apache.commons.compress.archivers.tar.TarArchiveOutputStream(gzos).use { tos ->
+                    val data = "hello from tar.gz".toByteArray()
+                    val entry = org.apache.commons.compress.archivers.tar.TarArchiveEntry("inner/hello.txt")
+                    entry.size = data.size.toLong()
+                    tos.putArchiveEntry(entry)
+                    tos.write(data)
+                    tos.closeArchiveEntry()
+                }
+            }
+        }
+        h.navigate(dir.path)
+        h.select("tar_extract/bundle.tar.gz")
+        h.vm.extractSelection()
+        h.settle()
+        val extracted = java.io.File(dir, "bundle/inner/hello.txt")
+        assertTrue("Expected extracted file at ${extracted.path}", extracted.exists())
+        assertEquals("hello from tar.gz", extracted.readText())
+    }
+
     // ------------------------------------------------------------------ pins, view options, settings
 
     @Test fun pinsAddRemoveReorderAndPersist() {

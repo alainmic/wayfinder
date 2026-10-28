@@ -1261,7 +1261,7 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
     }
 
     fun extractSelection() {
-        val z = tab.selectedEntries(hidden).filter { !it.isDir && it.extension.equals("zip", true) }
+        val z = tab.selectedEntries(hidden).filter { isBrowsableArchive(it) }
         if (z.isEmpty() || FsPath.isReadOnly(tab.path)) return
         val dir = tab.path
         launchOp("Extracting", { report -> z.map { ops.extract(it.path, dir, report) } }) { out ->

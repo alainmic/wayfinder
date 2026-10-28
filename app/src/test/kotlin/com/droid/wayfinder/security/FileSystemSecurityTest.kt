@@ -174,13 +174,78 @@ class FileSystemSecurityTest {
         val f = File(work, "f.txt").apply { writeText("x") }
         val trashed = t.moveToTrash(listOf(f.path)).single()
         val origin = File(File(trashed.trashed).parentFile, ".origin")
-        for (bad in listOf("relative/path", "/a/../../etc/x", "/x\u0000y", "/a\n/b", "${File(sandbox, ".Trash").path}/x", "/a.zip!/x", "")) {
+        for (bad in listOf(
+            "relative/path",
+            "/a/../../etc/x",
+            "/x\u0000y",
+            "/a\n/b",
+            "${File(sandbox, ".Trash").path}/x",
+            "/a.zip!/x",
+            "",
+            "/data/data/com.droid.wayfinder/shared_prefs/settings.xml",
+            "/data/user/0/com.droid.wayfinder/files/secret",
+            "/etc/passwd",
+            "/outside/sandbox/file.txt",
+        )) {
             origin.writeText(bad)
             assertNull("accepted '$bad'", t.originalOf(trashed.trashed))
             try { t.restore(trashed.trashed); fail("restored to '$bad'") } catch (_: IOException) {}
         }
         assertEquals(null, TrashManager.validOrigin("/storage/../data/data/x", "/t"))
+        assertEquals(null, TrashManager.validOrigin("/data/data/com.droid.wayfinder/shared_prefs/smb.xml", "/storage/emulated/0/.Wayfinder-Trash"))
+        assertEquals(null, TrashManager.validOrigin("/data/user/0/com.droid.wayfinder/cache/x", "/storage/emulated/0/.Wayfinder-Trash"))
+        assertEquals(
+            null,
+            TrashManager.validOrigin(
+                "/storage/emulated/10/other.txt",
+                "/storage/emulated/0/.Wayfinder-Trash",
+                allowedRoots = listOf("/storage/emulated/0"),
+            ),
+        )
         assertEquals("/storage/emulated/0/a", TrashManager.validOrigin("//storage//emulated/0/a/", "/t"))
+    }
+
+    @Test
+    fun trashRefusesToRestoreSymlinkItemOrThroughSymlinkParent() {
+        val t = trash()
+        val f = File(work, "f.txt").apply { writeText("x") }
+        val trashed = t.moveToTrash(listOf(f.path)).single()
+        val slotDir = File(trashed.trashed).parentFile!!
+
+        // Replace trashed file with a symlink pointing to victim/precious.txt.
+        File(trashed.trashed).delete()
+        link(File(slotDir, "f.txt"), File(victim, "precious.txt"))
+        try {
+            t.restore(trashed.trashed)
+            fail("restored a symlink item from Trash")
+        } catch (_: IOException) {}
+        assertVictimIntact()
+
+        // Replace destination parent with a symlink pointing outside work.
+        File(trashed.trashed).delete()
+        File(trashed.trashed).writeText("payload")
+        val escapeParent = File(work, "symlink_parent")
+        link(escapeParent, victim)
+        File(slotDir, ".origin").writeText(File(escapeParent, "precious.txt").path)
+        try {
+            t.restore(trashed.trashed)
+            fail("restored through a symlink parent")
+        } catch (_: IOException) {}
+        assertVictimIntact()
+    }
+
+    @Test
+    fun copyTreeSkipsNestedSymlinks() {
+        val src = File(work, "tree").apply { mkdirs(); File(this, "ok.txt").writeText("ok") }
+        link(File(src, "sym_file"), File(victim, "precious.txt"))
+        link(File(src, "sym_dir"), victim)
+        val dst = File(work, "tree_copy")
+        FileInfo.copyTree(src, dst)
+        assertEquals("ok", File(dst, "ok.txt").readText())
+        assertFalse(FileInfo.isSymlink(File(dst, "sym_file").path))
+        assertFalse(File(dst, "sym_file").exists())
+        assertFalse(FileInfo.isSymlink(File(dst, "sym_dir").path))
+        assertFalse(File(dst, "sym_dir").exists())
     }
 
     // ------------------------------------------------------------------ WebDAV XML

@@ -146,25 +146,24 @@ object FileInfo {
     }
 
     /**
-     * Copies [src] to [dst] recursively without following symbolic links: links are recreated as links when the
-     * target file system supports them and skipped otherwise. [dst] must not exist.
+     * Copies [src] to [dst] recursively without following or recreating symbolic links.
+     * [dst] must not exist.
      */
     fun copyTree(src: File, dst: File) {
         val from = src.toPath()
         val to = dst.toPath()
+        if (Files.isSymbolicLink(from)) return
         Files.walkFileTree(from, object : SimpleFileVisitor<Path>() {
             override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
+                if (attrs.isSymbolicLink) return FileVisitResult.SKIP_SUBTREE
                 Files.createDirectories(to.resolve(from.relativize(dir).toString()))
                 return FileVisitResult.CONTINUE
             }
 
             override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                if (attrs.isSymbolicLink) return FileVisitResult.CONTINUE
                 val target = to.resolve(from.relativize(file).toString())
-                if (attrs.isSymbolicLink) {
-                    runCatching { Files.createSymbolicLink(target, Files.readSymbolicLink(file)) }
-                } else {
-                    Files.copy(file, target, StandardCopyOption.COPY_ATTRIBUTES, LinkOption.NOFOLLOW_LINKS)
-                }
+                Files.copy(file, target, StandardCopyOption.COPY_ATTRIBUTES, LinkOption.NOFOLLOW_LINKS)
                 return FileVisitResult.CONTINUE
             }
         })

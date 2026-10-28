@@ -15,7 +15,11 @@ data class Trashed(val original: String, val trashed: String)
  * The bin lives on shared storage, so its contents are treated as untrusted: `.origin` must name an absolute
  * local path outside the bin, permanent deletion is confined to the bin, and nothing here follows symbolic links.
  */
-class TrashManager(private val root: File) {
+class TrashManager(
+    private val root: File,
+    private val allowedRoots: List<String> = listOfNotNull(root.parentFile?.path),
+    private val forbiddenRoots: List<String> = emptyList(),
+) {
 
     fun isInTrash(path: String) = path == FsPath.TRASH_ROOT || FsPath.isWithin(root.path, path)
 
@@ -79,9 +83,9 @@ class TrashManager(private val root: File) {
     /** The recorded original location, or null when missing or not a plausible absolute local path. */
     private fun readOrigin(slot: File): String? {
         val f = File(slot, ".origin")
-        if (!f.isFile || f.length() > 64 * 1024) return null
+        if (!f.isFile || FileInfo.isSymlink(f.path) || f.length() > 64 * 1024) return null
         val raw = runCatching { f.readText() }.getOrNull()?.trim() ?: return null
-        return validOrigin(raw, root.path)
+        return validOrigin(raw, root.path, allowedRoots, forbiddenRoots)
     }
 
     fun originalOf(trashedPath: String): String? {
@@ -89,13 +93,34 @@ class TrashManager(private val root: File) {
         return readOrigin(dir)
     }
 
+    private fun hasSymlinkAncestor(file: File): Boolean {
+        var cur: File? = file
+        val stopPaths = allowedRoots.map { FsPath.normalize(it) }.toSet()
+        while (cur != null) {
+            if (FileInfo.isSymlink(cur.path)) return true
+            if (FsPath.normalize(cur.path) in stopPaths) break
+            cur = cur.parentFile
+        }
+        return false
+    }
+
     /** Returns the restored path. */
     fun restore(trashedPath: String): String {
         val src = File(trashedPath)
         val slot = slotOf(trashedPath) ?: throw IOException("Not an item in the Trash")
+        if (FileInfo.isSymlink(src.path)) throw IOException("Refusing to restore symbolic link from Trash")
         val origin = originalOf(trashedPath) ?: throw IOException("Unknown original location")
         var dst = File(origin)
-        dst.parentFile?.mkdirs()
+        val parent = dst.parentFile ?: throw IOException("Invalid original location")
+        if (hasSymlinkAncestor(parent)) throw IOException("Refusing to restore through symbolic link ancestor")
+        parent.mkdirs()
+        val canonicalParent = runCatching { parent.canonicalPath }.getOrElse { throw IOException("Invalid destination folder", it) }
+        val canonicalTrash = runCatching { root.canonicalPath }.getOrDefault(root.path)
+        val canonicalAllowed = allowedRoots.map { runCatching { File(it).canonicalPath }.getOrDefault(it) }
+        val canonicalForbidden = forbiddenRoots.map { runCatching { File(it).canonicalPath }.getOrDefault(it) }
+        if (validOrigin("$canonicalParent/${dst.name}", canonicalTrash, canonicalAllowed, canonicalForbidden) == null) {
+            throw IOException("Destination outside allowed storage roots")
+        }
         if (dst.exists() || FileInfo.isSymlink(dst.path)) {
             val base = dst.nameWithoutExtension
             val ext = dst.extension.let { if (it.isEmpty()) "" else ".$it" }
@@ -135,17 +160,41 @@ class TrashManager(private val root: File) {
     }
 
     companion object {
+        private val FORBIDDEN_SYSTEM_ROOTS = listOf(
+            "/data/data",
+            "/data/user",
+            "/data/user_de",
+            "/data/system",
+            "/data/misc",
+            "/proc",
+            "/sys",
+            "/dev",
+            "/system",
+            "/vendor",
+            "/apex",
+            "/etc",
+        )
+
         /**
          * Validates a `.origin` record: a single-line absolute, normalised local path (no `.`/`..` segments, no NUL)
-         * that is not inside [trashRoot]. Returns null when it doesn't qualify.
+         * that is not inside [trashRoot], not inside app-private or system directories, and (when [allowedRoots] is
+         * non-empty) strictly within one of [allowedRoots]. Returns null when it doesn't qualify.
          */
-        fun validOrigin(raw: String, trashRoot: String): String? {
+        fun validOrigin(
+            raw: String,
+            trashRoot: String,
+            allowedRoots: List<String> = emptyList(),
+            forbiddenRoots: List<String> = emptyList(),
+        ): String? {
             if (raw.isEmpty() || raw.length > 4096 || !raw.startsWith("/")) return null
             if (raw.any { it == '\u0000' || it == '\n' || it == '\r' }) return null
             val segs = raw.split('/').filter { it.isNotEmpty() }
             if (segs.isEmpty() || segs.any { it == "." || it == ".." }) return null
             val p = "/" + segs.joinToString("/")
             if (FsPath.isZip(p) || FsPath.isWithin(trashRoot, p)) return null
+            if (FORBIDDEN_SYSTEM_ROOTS.any { FsPath.isWithin(it, p) && !FsPath.isWithin(it, trashRoot) }) return null
+            if (forbiddenRoots.any { FsPath.isWithin(it, p) }) return null
+            if (allowedRoots.isNotEmpty() && allowedRoots.none { FsPath.isWithin(it, p) && FsPath.normalize(it) != p }) return null
             return p
         }
     }

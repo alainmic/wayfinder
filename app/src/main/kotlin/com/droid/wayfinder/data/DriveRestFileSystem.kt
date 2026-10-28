@@ -8,11 +8,13 @@ import android.content.Context
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
+import java.io.FilterOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -205,21 +207,49 @@ class DriveRestFileSystem(
     override fun openOutput(path: String): OutputStream {
         val (email, _) = parsePath(path)
         val token = getToken(email)
-        val baos = ByteArrayOutputStream()
-        return object : OutputStream() {
-            override fun write(b: Int) = baos.write(b)
-            override fun write(b: ByteArray, off: Int, len: Int) = baos.write(b, off, len)
+        val cacheDir = runCatching { context.cacheDir }.getOrNull()
+        val tmp = File.createTempFile("wf-gdrive", ".part", cacheDir)
+        val fos = try {
+            FileOutputStream(tmp).buffered(256 * 1024)
+        } catch (e: Throwable) {
+            tmp.delete()
+            throw e
+        }
+        return object : FilterOutputStream(fos) {
+            private var closed = false
+            override fun write(b: Int) {
+                try {
+                    out.write(b)
+                } catch (e: IOException) {
+                    tmp.delete()
+                    throw e
+                }
+            }
+            override fun write(b: ByteArray, off: Int, len: Int) {
+                try {
+                    out.write(b, off, len)
+                } catch (e: IOException) {
+                    tmp.delete()
+                    throw e
+                }
+            }
             override fun close() {
-                val bytes = baos.toByteArray()
-                val url = "https://www.googleapis.com/upload/drive/v3/files?uploadType=media"
-                val body = bytes.toRequestBody("application/octet-stream".toMediaType())
-                val req = Request.Builder()
-                    .url(url)
-                    .header("Authorization", "Bearer $token")
-                    .post(body)
-                    .build()
-                client.newCall(req).execute().use { resp ->
-                    if (!resp.isSuccessful) throw IOException("Failed to upload to Google Drive (HTTP ${resp.code})")
+                if (closed) return
+                closed = true
+                try {
+                    super.close()
+                    val url = "https://www.googleapis.com/upload/drive/v3/files?uploadType=media"
+                    val body = tmp.asRequestBody("application/octet-stream".toMediaType())
+                    val req = Request.Builder()
+                        .url(url)
+                        .header("Authorization", "Bearer $token")
+                        .post(body)
+                        .build()
+                    client.newCall(req).execute().use { resp ->
+                        if (!resp.isSuccessful) throw IOException("Failed to upload to Google Drive (HTTP ${resp.code})")
+                    }
+                } finally {
+                    tmp.delete()
                 }
             }
         }

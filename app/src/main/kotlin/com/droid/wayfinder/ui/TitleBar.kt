@@ -53,6 +53,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -115,7 +116,7 @@ fun TitleBar(vm: BrowserViewModel, s: AppState, onShowMenu: (androidx.compose.ui
                 }
                 Box(
                     Modifier.padding(start = 4.dp, bottom = 4.dp).size(32.dp).clip(CircleShape)
-                        .mouseGestures("add", onClick = { _, _, _ -> vm.newTab() }),
+                        .mouseGestures("add", role = Role.Button, onClickLabel = "New tab", onClick = { _, _, _ -> vm.newTab() }),
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Filled.Add, "New tab (Ctrl+T)", Modifier.size(20.dp), tint = cs.onSurfaceVariant) }
             }
@@ -162,6 +163,9 @@ private fun TabItem(
             }
             .mouseGestures(
                 tab.id,
+                role = Role.Tab,
+                selected = selected,
+                onClickLabel = "Select tab ${s.titleOf(tab.path)}",
                 onClick = { _, _, _ -> vm.selectTab(tab.id) },
                 onMiddle = { vm.closeTab(tab.id) },
                 onSecondary = { onShowMenu(it, tabMenu(vm, tab.id)) },
@@ -188,7 +192,12 @@ private fun TabItem(
             )
             if (selected || hovered || width > 140.dp) {
                 Box(
-                    Modifier.size(22.dp).clip(CircleShape).mouseGestures("close${tab.id}", onClick = { _, _, _ -> vm.closeTab(tab.id) }),
+                    Modifier.size(22.dp).clip(CircleShape).mouseGestures(
+                        "close${tab.id}",
+                        role = Role.Button,
+                        onClickLabel = "Close tab ${s.titleOf(tab.path)}",
+                        onClick = { _, _, _ -> vm.closeTab(tab.id) },
+                    ),
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Filled.Close, "Close tab", Modifier.size(14.dp), tint = cs.onSurfaceVariant) }
             } else Box(Modifier.size(22.dp))

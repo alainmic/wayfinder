@@ -66,6 +66,7 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.droid.wayfinder.data.FsPath
@@ -267,7 +268,7 @@ fun Sidebar(vm: BrowserViewModel, s: AppState, modifier: Modifier) {
 @Composable
 private fun HeaderAction(icon: ImageVector, desc: String, onClick: () -> Unit) {
     Box(
-        Modifier.size(24.dp).clip(RoundedCornerShape(12.dp)).mouseGestures(desc, onClick = { _, _, _ -> onClick() }),
+        Modifier.size(24.dp).clip(RoundedCornerShape(12.dp)).mouseGestures(desc, role = Role.Button, onClickLabel = desc, onClick = { _, _, _ -> onClick() }),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, desc, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
 }
@@ -339,6 +340,9 @@ private fun SidebarItem(
             .dropTarget(dropPath)
             .mouseGestures(
                 label + depth + dropPath + subtitle.orEmpty(),
+                role = Role.Button,
+                selected = selected,
+                onClickLabel = "Open $label",
                 onClick = { _, _, _ -> onClick() }, onMiddle = onMiddle,
                 onSecondary = onSecondary, onLongPress = onSecondary,
             )
@@ -347,7 +351,14 @@ private fun SidebarItem(
     ) {
         Box(
             Modifier.size(24.dp).clip(RoundedCornerShape(12.dp)).then(
-                if (expandable) Modifier.mouseGestures("toggle$label$depth", onClick = { _, _, _ -> onToggle() }) else Modifier,
+                if (expandable) {
+                    Modifier.mouseGestures(
+                        "toggle$label$depth",
+                        role = Role.Button,
+                        onClickLabel = if (expanded) "Collapse $label" else "Expand $label",
+                        onClick = { _, _, _ -> onToggle() },
+                    )
+                } else Modifier,
             ),
             contentAlignment = Alignment.Center,
         ) {

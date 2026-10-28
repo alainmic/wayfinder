@@ -72,6 +72,11 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
@@ -159,6 +164,7 @@ private fun PathBar(vm: BrowserViewModel, s: AppState, modifier: Modifier) {
         Row(modifier.height(40.dp).clip(shape).background(cs.surfaceContainerLowest).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             BasicTextField(
                 tf, { tf = it }, Modifier.weight(1f).focusRequester(fr)
+                    .semantics { contentDescription = "Address bar" }
                     .onFocusChanged {
                         // The initial (unfocused) event arrives before requestFocus(); only a real blur ends editing.
                         if (it.isFocused) { hadFocus = true; vm.setTextFocus(true) }
@@ -235,6 +241,7 @@ private fun SearchField(vm: BrowserViewModel, s: AppState, modifier: Modifier) {
             BasicTextField(
                 tab.query, { vm.setQuery(it) },
                 Modifier.fillMaxWidth().focusRequester(fr)
+                    .semantics { contentDescription = "Search files" }
                     .onFocusChanged { vm.setTextFocus(it.isFocused) }
                     .onPreviewKeyEvent { e ->
                         if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) { vm.setQuery(""); focus.clearFocus(); true }
@@ -310,16 +317,26 @@ private fun ViewToggle(vm: BrowserViewModel, mode: ViewMode, dual: Boolean) {
         ).forEach { (m, icon, desc) ->
             val sel = m == mode
             Box(
-                Modifier.size(width = 40.dp, height = 36.dp).clip(RoundedCornerShape(18.dp))
+                Modifier.size(width = 40.dp, height = 36.dp)
+                    .semantics {
+                        role = Role.Tab
+                        this.selected = sel
+                    }
+                    .clip(RoundedCornerShape(18.dp))
                     .background(if (sel) cs.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent)
-                    .clickable { vm.setViewMode(m) },
+                    .clickable(role = Role.Tab, onClickLabel = desc) { vm.setViewMode(m) },
                 contentAlignment = Alignment.Center,
             ) { Icon(icon, desc, Modifier.size(20.dp), tint = if (sel) cs.onSecondaryContainer else cs.onSurfaceVariant) }
         }
         Box(
-            Modifier.size(width = 40.dp, height = 36.dp).clip(RoundedCornerShape(18.dp))
+            Modifier.size(width = 40.dp, height = 36.dp)
+                .semantics {
+                    role = Role.Checkbox
+                    this.selected = dual
+                }
+                .clip(RoundedCornerShape(18.dp))
                 .background(if (dual) cs.tertiaryContainer else androidx.compose.ui.graphics.Color.Transparent)
-                .clickable { vm.toggleDualPane() },
+                .clickable(role = Role.Checkbox, onClickLabel = "Toggle dual pane") { vm.toggleDualPane() },
             contentAlignment = Alignment.Center,
         ) { Icon(Icons.Outlined.VerticalSplit, "Dual pane (Ctrl+4 / F3)", Modifier.size(20.dp), tint = if (dual) cs.onTertiaryContainer else cs.onSurfaceVariant) }
     }

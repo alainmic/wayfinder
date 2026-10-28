@@ -14,168 +14,258 @@ import android.os.storage.StorageManager
 import com.droid.wayfinder.ui.Mount
 
 object PhoneDetector {
+    /** System DocumentsProvider authority for wireless Cross-Device / Exo phone file access on Googlebooks. */
+    const val QUICK_ACCESS_AUTHORITY = "com.google.ambient.streaming.multidevicesync.quickaccess"
+
+    /** System DocumentsProvider authority for wired USB MTP file transfer. */
+    const val MTP_AUTHORITY = "com.android.mtp.documents"
+
+    val PHONE_AUTHORITIES = setOf(QUICK_ACCESS_AUTHORITY, MTP_AUTHORITY)
+
+    fun isPhoneAuthority(authority: String?): Boolean {
+        if (authority.isNullOrBlank()) return false
+        val clean = authority.substringAfter('@').lowercase()
+        return clean in PHONE_AUTHORITIES || clean.contains("quickaccess") || clean.contains("mtp.documents")
+    }
 
     /**
-     * Checks if a phone is paired or actively connected (via Bluetooth bonded/connected device,
+     * Checks if a phone is paired or actively connected (via Cross-Device QuickAccess,
      * USB MTP/PTP, or active phone SAF / MTP storage mount).
      */
     fun isPhoneConnected(context: Context, mounts: List<String> = emptyList()): Boolean {
         // 1. Check if any active SAF or storage mount corresponds to a phone/MTP device
         if (mounts.any { isPhoneMount(it) }) return true
 
-        // 2. Check USB devices for connected phone / MTP device
-        if (isUsbPhoneConnected(context)) return true
+        // 2. Check direct system DocumentsProvider roots for QuickAccess or MTP
+        val hasProviderRoot = runCatching {
+            SystemDocumentsBridge.discoverRoots(context).any { r ->
+                isPhoneAuthority(r.authority) || isPhoneMount(r.title)
+            }
+        }.getOrDefault(false)
+        if (hasProviderRoot) return true
 
-        // 3. Check Bluetooth for a paired or connected phone
-        if (isBluetoothPhoneConnected(context)) return true
+        // 3. Check USB devices for connected phone / MTP device
+        if (findConnectedUsbPhoneName(context) != null) return true
+
+        // 4. Check Bluetooth for an actively connected phone
+        if (findConnectedBluetoothPhoneName(context) != null) return true
 
         return false
     }
 
     /**
-     * Detects a paired phone (e.g. Pixel 9) and returns its name, subtitle, and access path.
+     * Detects a connected or paired phone and returns its real DocumentsProvider (`doc://` or `saf://`)
+     * mount path when accessible, or an unmounted connection descriptor (`isMounted = false`) when
+     * a phone is detected over USB/Bluetooth without an active storage grant.
      */
-    fun detectPairedPhone(context: Context, mounts: List<Mount> = emptyList()): PairedPhone? {
-        // 1. Check direct system DocumentsProvider roots (Pixel 9, MTP, Phone)
+    fun detectPairedPhone(
+        context: Context,
+        mounts: List<Mount> = emptyList(),
+        safMounts: List<SafMount> = emptyList(),
+    ): PairedPhone? {
+        // 1. Check direct system DocumentsProvider roots (QuickAccessDocumentsProvider & MtpDocumentsProvider)
         runCatching {
             val roots = SystemDocumentsBridge.discoverRoots(context)
-            for (r in roots) {
-                val title = r.title.lowercase()
-                val auth = r.authority.lowercase()
-                if (title.contains("pixel") || title.contains("phone") || auth.contains("mtp") || auth.contains("phone") || auth.contains("bettertogether")) {
-                    val path = "doc://${r.authority}/${r.documentId}"
-                    return PairedPhone(name = if (r.title.isNotBlank()) r.title else "Pixel 9", subtitle = "Internal Storage", path = path, isConnected = true)
+            val phoneRoot = roots.firstOrNull { r ->
+                r.authority == QUICK_ACCESS_AUTHORITY || r.authority == MTP_AUTHORITY
+            } ?: roots.firstOrNull { r ->
+                isPhoneAuthority(r.authority) || (r.authority != GoogleDriveManager.DOCS_AUTHORITY && isPhoneMount(r.title))
+            }
+            if (phoneRoot != null) {
+                val path = "doc://${phoneRoot.authority}/${phoneRoot.documentId}"
+                val transport = if (phoneRoot.authority.contains("mtp", ignoreCase = true)) {
+                    PhoneTransport.USB_MTP
+                } else {
+                    PhoneTransport.QUICK_ACCESS
                 }
+                val sub = phoneRoot.summary?.takeIf { it.isNotBlank() }
+                    ?: if (transport == PhoneTransport.USB_MTP) "USB file transfer" else "Internal storage"
+                return PairedPhone(
+                    name = phoneRoot.title.ifBlank { "Connected Phone" },
+                    subtitle = sub,
+                    path = path,
+                    isConnected = true,
+                    authority = phoneRoot.authority,
+                    isMounted = true,
+                    transport = transport,
+                )
             }
         }
 
-        // 2. Check mounts
+        // 2. Check SAF mounts whose URI points to QuickAccessDocumentsProvider or MtpDocumentsProvider
+        for (sm in safMounts) {
+            val uriAuth = runCatching { android.net.Uri.parse(sm.uri).authority }.getOrNull()
+            if (isPhoneAuthority(uriAuth) || isPhoneMount(sm.label)) {
+                val transport = if (uriAuth?.contains("mtp", ignoreCase = true) == true) {
+                    PhoneTransport.USB_MTP
+                } else {
+                    PhoneTransport.QUICK_ACCESS
+                }
+                val sub = if (transport == PhoneTransport.USB_MTP) "USB file transfer" else "Internal storage"
+                return PairedPhone(
+                    name = sm.label.removePrefix("Connected Phone · ").ifBlank { "Connected Phone" },
+                    subtitle = sub,
+                    path = sm.path,
+                    isConnected = true,
+                    authority = uriAuth,
+                    isMounted = true,
+                    transport = transport,
+                )
+            }
+        }
+
+        // 3. Check generic mounts list passed by the ViewModel
         for (m in mounts) {
             if (isPhoneMount(m.label) || isPhoneMount(m.path)) {
-                return PairedPhone(name = m.label, subtitle = "Internal Storage", path = m.path, isConnected = true)
+                return PairedPhone(
+                    name = m.label,
+                    subtitle = "Internal storage",
+                    path = m.path,
+                    isConnected = true,
+                    authority = null,
+                    isMounted = true,
+                    transport = PhoneTransport.QUICK_ACCESS,
+                )
             }
         }
 
-        // 2. Check StorageManager storage volumes for removable / MTP phone volumes
+        // 4. Check StorageManager secondary storage volumes for removable / MTP phone volumes
         runCatching {
             val sm = context.getSystemService(StorageManager::class.java)
             for (vol in sm.storageVolumes) {
+                if (vol.isPrimary) continue
                 val desc = runCatching { vol.getDescription(context) }.getOrNull().orEmpty()
-                val isSecondary = !vol.isPrimary
-                val reflectionPath = runCatching {
-                    val m = vol.javaClass.getMethod("getPath")
-                    m.invoke(vol) as? String
-                }.getOrNull()
-                val dirPath = vol.directory?.path ?: reflectionPath
-                if (isPhoneMount(desc) || (isSecondary && isPhoneMount(vol.mediaStoreVolumeName.orEmpty())) || (isSecondary && desc.contains("Pixel", true))) {
-                    val path = dirPath ?: FsPath.PHONE_ROOT
-                    val name = if (desc.isNotBlank()) desc else "Pixel 9"
-                    return PairedPhone(name = name, subtitle = "Internal Storage", path = path, isConnected = true)
+                val dirPath = vol.directory?.path ?: continue
+                if (isPhoneMount(desc) || isPhoneMount(vol.mediaStoreVolumeName.orEmpty())) {
+                    return PairedPhone(
+                        name = desc.ifBlank { "Connected Phone" },
+                        subtitle = "Internal storage",
+                        path = dirPath,
+                        isConnected = true,
+                        authority = null,
+                        isMounted = true,
+                        transport = PhoneTransport.STORAGE_VOLUME,
+                    )
                 }
             }
         }
 
-        // 3. Check /storage directory for secondary phone mounts
-        runCatching {
-            java.io.File("/storage").listFiles()?.forEach { f ->
-                if (f.isDirectory && f.name != "emulated" && f.name != "self") {
-                    val hasPhoneDirs = f.listFiles()?.any { it.name.equals("DCIM", true) || it.name.equals("Android", true) } == true
-                    if (isPhoneMount(f.name) || hasPhoneDirs) {
-                        return PairedPhone(name = "Pixel 9", subtitle = "Internal Storage", path = f.absolutePath, isConnected = true)
-                    }
-                }
-            }
+        // 5. Check attached USB MTP phone (not yet mounted as a DocumentsProvider root)
+        findConnectedUsbPhoneName(context)?.let { usbName ->
+            return PairedPhone(
+                name = usbName,
+                subtitle = "USB · Tap to connect storage",
+                path = FsPath.PHONE_ROOT,
+                isConnected = true,
+                authority = MTP_AUTHORITY,
+                isMounted = false,
+                transport = PhoneTransport.USB_MTP,
+            )
         }
 
-        // 4. Check USB devices
-        runCatching {
-            val usbManager = context.getSystemService(Context.USB_SERVICE) as? UsbManager
-            usbManager?.deviceList?.values?.forEach { dev ->
-                val prod = dev.productName.orEmpty()
-                if (isPhoneMount(prod)) {
-                    return PairedPhone(name = prod, subtitle = "Internal Storage", path = FsPath.PHONE_ROOT, isConnected = true)
-                }
-            }
+        // 6. Check actively connected Bluetooth phone (not yet mounted via QuickAccessDocumentsProvider)
+        findConnectedBluetoothPhoneName(context)?.let { btName ->
+            return PairedPhone(
+                name = btName,
+                subtitle = "Tap to connect phone storage",
+                path = FsPath.PHONE_ROOT,
+                isConnected = true,
+                authority = QUICK_ACCESS_AUTHORITY,
+                isMounted = false,
+                transport = PhoneTransport.BLUETOOTH_UNMOUNTED,
+            )
         }
 
-        // 4. Check Bluetooth bonded / paired devices
-        runCatching {
-            val btManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
-            val adapter = btManager?.adapter
-            if (adapter != null && adapter.isEnabled) {
-                adapter.bondedDevices?.forEach { dev ->
-                    if (isPhoneBluetoothDevice(dev.bluetoothClass) || isPhoneMount(dev.name.orEmpty())) {
-                        val name = dev.name?.takeIf { it.isNotBlank() } ?: "Pixel 9"
-                        return PairedPhone(name = name, subtitle = "Internal Storage", path = FsPath.PHONE_ROOT, isConnected = true)
-                    }
-                }
-            }
-        }
-
-        // 5. Default paired phone for Googlebook environment (Cross-Device / Phone Hub)
-        // If phone is connected or paired
-        if (isPhoneConnected(context, mounts.map { it.label + " " + it.path })) {
-            return PairedPhone(name = "Pixel 9", subtitle = "Internal Storage", path = FsPath.PHONE_ROOT, isConnected = true)
-        }
-
-        // If running on Android laptop / ASUS Googlebook with paired phone, provide default Pixel 9
-        return PairedPhone(name = "Pixel 9", subtitle = "Internal Storage", path = FsPath.PHONE_ROOT, isConnected = true)
+        return null
     }
 
     fun isPhoneMount(labelOrPath: String): Boolean {
         val l = labelOrPath.lowercase()
-        return l.contains("phone") || l.contains("mtp") || l.contains("pixel") ||
-            l.contains("galaxy") || l.contains("xperia") || l.contains("oneplus") ||
-            l.contains("xiaomi") || l.contains("huawei") || l.contains("motorola")
+        if (l.contains("headphone") || l.contains("microphone") || l.contains("earphone") ||
+            l.contains("speakerphone") || l.contains("lan") || l.contains("ethernet") ||
+            l.contains("hub") || l.contains("dock") || l.contains("hid")
+        ) {
+            return false
+        }
+        return l.contains("phone") || l.contains("mtp") || l.contains("quickaccess") ||
+            l.contains("pixel") || l.contains("galaxy") || l.contains("xperia") ||
+            l.contains("oneplus") || l.contains("xiaomi") || l.contains("huawei") ||
+            l.contains("motorola") || l.contains("iphone")
     }
 
-    private fun isUsbPhoneConnected(context: Context): Boolean {
+    /**
+     * Returns the display name of an attached USB MTP/PTP phone, or null if no USB phone is attached.
+     * Excludes USB hubs, Ethernet adapters (`USB_CLASS_COMM` / `USB_CLASS_CDC_DATA`), HID devices, and webcams.
+     */
+    fun findConnectedUsbPhoneName(context: Context): String? {
         return runCatching {
-            val usbManager = context.getSystemService(Context.USB_SERVICE) as? UsbManager ?: return false
-            usbManager.deviceList.values.any { dev ->
-                if (dev.deviceClass == UsbConstants.USB_CLASS_STILL_IMAGE) return@any true
-                (0 until dev.interfaceCount).any { i ->
-                    val iface = dev.getInterface(i)
-                    iface.interfaceClass == UsbConstants.USB_CLASS_STILL_IMAGE ||
-                        (iface.interfaceClass == UsbConstants.USB_CLASS_VENDOR_SPEC && iface.interfaceSubclass == 255) ||
-                        iface.name?.contains("mtp", ignoreCase = true) == true ||
-                        iface.name?.contains("phone", ignoreCase = true) == true
-                } || dev.productName?.let { isPhoneMount(it) } == true
+            val usbManager = context.getSystemService(Context.USB_SERVICE) as? UsbManager ?: return null
+            for (dev in usbManager.deviceList.values) {
+                val prod = dev.productName?.trim().orEmpty()
+                if (dev.deviceClass == UsbConstants.USB_CLASS_HUB || dev.deviceClass == UsbConstants.USB_CLASS_COMM) {
+                    continue
+                }
+                val hasNetworkOrHubIface = (0 until dev.interfaceCount).any { i ->
+                    val cls = dev.getInterface(i).interfaceClass
+                    cls == UsbConstants.USB_CLASS_HUB ||
+                        cls == UsbConstants.USB_CLASS_COMM ||
+                        cls == UsbConstants.USB_CLASS_CDC_DATA ||
+                        cls == UsbConstants.USB_CLASS_VIDEO
+                }
+                if (hasNetworkOrHubIface && !isPhoneMount(prod)) continue
+
+                val isStillImageOrMtp = dev.deviceClass == UsbConstants.USB_CLASS_STILL_IMAGE ||
+                    (0 until dev.interfaceCount).any { i ->
+                        val iface = dev.getInterface(i)
+                        (iface.interfaceClass == UsbConstants.USB_CLASS_STILL_IMAGE &&
+                            iface.interfaceSubclass == 1 && iface.interfaceProtocol == 1) ||
+                            iface.name?.contains("mtp", ignoreCase = true) == true
+                    }
+                if (isStillImageOrMtp || (prod.isNotEmpty() && isPhoneMount(prod))) {
+                    return prod.ifEmpty { "USB Phone" }
+                }
             }
-        }.getOrDefault(false)
+            null
+        }.getOrNull()
     }
 
-    private fun isBluetoothPhoneConnected(context: Context): Boolean {
+    /**
+     * Returns the display name of an actively connected Bluetooth smartphone (`Major.PHONE`),
+     * or null when no phone is connected over Bluetooth.
+     */
+    fun findConnectedBluetoothPhoneName(context: Context): String? {
         return runCatching {
-            val btManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager ?: return false
-            val adapter = btManager.adapter ?: return false
-            if (!adapter.isEnabled) return false
+            val btManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager ?: return null
+            val adapter = btManager.adapter ?: return null
+            if (!adapter.isEnabled) return null
 
-            val connectedHeadset = btManager.getConnectedDevices(BluetoothProfile.HEADSET)
-            val connectedA2dp = btManager.getConnectedDevices(BluetoothProfile.A2DP)
-            val allConnected = (connectedHeadset + connectedA2dp).distinct()
+            val connectedProfiles = buildList {
+                runCatching { addAll(btManager.getConnectedDevices(BluetoothProfile.HEADSET)) }
+                runCatching { addAll(btManager.getConnectedDevices(BluetoothProfile.A2DP)) }
+                runCatching { addAll(btManager.getConnectedDevices(BluetoothProfile.GATT)) }
+            }.distinct()
 
-            if (allConnected.any { dev -> isPhoneBluetoothDevice(dev.bluetoothClass) }) {
-                return true
+            connectedProfiles.firstOrNull { dev ->
+                isPhoneBluetoothDevice(dev.bluetoothClass) || isPhoneMount(dev.name.orEmpty())
+            }?.let { dev ->
+                return dev.name?.takeIf { it.isNotBlank() } ?: "Connected Phone"
             }
 
-            // Check paired/bonded devices (Phone Hub / Cross-Device pairs phones without audio profiles)
-            val bonded = adapter.bondedDevices
-            if (bonded?.any { dev -> isPhoneBluetoothDevice(dev.bluetoothClass) || isPhoneMount(dev.name.orEmpty()) } == true) {
-                return true
+            // Also check bonded Major.PHONE devices with an active ACL link (`BluetoothDevice.isConnected()`)
+            val bondedPhones = adapter.bondedDevices.orEmpty().filter { dev ->
+                isPhoneBluetoothDevice(dev.bluetoothClass)
             }
-
-            val isAudioConnected = adapter.getProfileConnectionState(BluetoothProfile.HEADSET) == BluetoothAdapter.STATE_CONNECTED ||
-                adapter.getProfileConnectionState(BluetoothProfile.A2DP) == BluetoothAdapter.STATE_CONNECTED
-            if (isAudioConnected) {
-                bonded?.any { dev ->
-                    isPhoneBluetoothDevice(dev.bluetoothClass)
-                } == true
-            } else {
-                false
+            bondedPhones.firstOrNull { dev -> isBluetoothAclConnected(dev) }?.let { dev ->
+                return dev.name?.takeIf { it.isNotBlank() } ?: "Connected Phone"
             }
-        }.getOrDefault(false)
+            null
+        }.getOrNull()
     }
+
+    private fun isBluetoothAclConnected(device: android.bluetooth.BluetoothDevice): Boolean =
+        runCatching {
+            device.javaClass.getMethod("isConnected").invoke(device) as? Boolean == true
+        }.getOrDefault(false)
 
     private fun isPhoneBluetoothDevice(btClass: BluetoothClass?): Boolean {
         if (btClass == null) return false

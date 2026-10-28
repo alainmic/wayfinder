@@ -156,12 +156,14 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
     private var hashJob: Job? = null
     private var recentsCache: Pair<Long, List<FileEntry>>? = null
     private var phoneReceiver: BroadcastReceiver? = null
+    private var rootsObserver: android.database.ContentObserver? = null
     private var pendingMountAccount: String? = null
 
     init {
         SharedUi.init(app)
         // Downloaded network files / extracted archive entries may be sensitive: don't keep them around forever.
         viewModelScope.launch(Dispatchers.IO) { cleanCaches() }
+        syncPersistedSafMounts()
         val roots = loadRoots()
         val pins = settings.pins ?: defaultPins(roots)
         val savedTabs = settings.tabs.filter {
@@ -176,7 +178,7 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
         }
         val tabs = startPaths.map { newTabState(it) }
         val initialDrive = GoogleDriveManager.discoverAccounts(app, safMounts)
-        val initialPhone = PhoneDetector.detectPairedPhone(app)
+        val initialPhone = PhoneDetector.detectPairedPhone(app, safMounts = safMounts)
         _state.value = AppState(
             tabs = tabs,
             activeId = tabs[(if (secondaryWindow || picker != null || startPath != null) 0 else settings.activeTab).coerceIn(0, tabs.lastIndex)].id,
@@ -230,6 +232,18 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
         runCatching {
             ContextCompat.registerReceiver(app, phoneReceiver, phoneFilter, ContextCompat.RECEIVER_NOT_EXPORTED)
         }
+        val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                refreshMounts()
+            }
+        }
+        rootsObserver = observer
+        for (auth in listOf(PhoneDetector.QUICK_ACCESS_AUTHORITY, PhoneDetector.MTP_AUTHORITY)) {
+            runCatching {
+                val rootsUri = android.provider.DocumentsContract.buildRootsUri(auth)
+                app.contentResolver.registerContentObserver(rootsUri, true, observer)
+            }
+        }
     }
 
     /** Removes cached downloads (open / picker results) older than a day. */
@@ -246,10 +260,14 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
             runCatching { app.unregisterReceiver(it) }
             phoneReceiver = null
         }
+        rootsObserver?.let {
+            runCatching { app.contentResolver.unregisterContentObserver(it) }
+            rootsObserver = null
+        }
     }
 
     fun refreshPhoneStatus() {
-        val phone = PhoneDetector.detectPairedPhone(app, _state.value.mounts)
+        val phone = PhoneDetector.detectPairedPhone(app, _state.value.mounts, safMounts)
         _state.update { it.copy(pairedPhone = phone, phoneConnected = phone != null) }
     }
 
@@ -298,12 +316,56 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
             Mount(sv.rootPath, sv.label, "${sv.protocol.label}${if (sv.user.isNotEmpty() && !sv.guest) " · ${sv.user}" else ""}", sv.key, saf = false)
         } + safMounts.map { m -> Mount(m.path, m.label, "Cloud / storage provider", m.id, saf = true) }
 
+    /**
+     * Synchronizes any persisted SAF tree URI permissions held by the app into [safMounts]
+     * so tree grants received on startup or across sessions are automatically mounted.
+     */
+    private fun syncPersistedSafMounts() {
+        val persisted = runCatching {
+            app.contentResolver.persistedUriPermissions.filter { perm ->
+                perm.isReadPermission && android.provider.DocumentsContract.isTreeUri(perm.uri)
+            }
+        }.getOrDefault(emptyList())
+        if (persisted.isEmpty()) return
+        var updated = safMounts
+        var changed = false
+        for (perm in persisted) {
+            val rawUri = perm.uri
+            val auth = rawUri.authority.orEmpty()
+            val uri = if (auth.contains('@')) rawUri.buildUpon().authority(auth.substringAfter('@')).build() else rawUri
+            val uriStr = uri.toString()
+            if (updated.any { it.uri == uriStr }) continue
+            val treeId = runCatching { android.provider.DocumentsContract.getTreeDocumentId(uri) }.getOrDefault("")
+            val provider = SafLabels.providerLabel(uri.authority.orEmpty(), treeId)
+            val name = runCatching {
+                app.contentResolver.query(
+                    android.provider.DocumentsContract.buildDocumentUriUsingTree(uri, treeId),
+                    arrayOf(android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME), null, null, null,
+                )?.use { c -> if (c.moveToFirst()) c.getString(0)?.trim() else null }
+            }.getOrNull()
+            val label = when {
+                PhoneDetector.isPhoneAuthority(uri.authority) ->
+                    name?.takeIf { it.isNotBlank() } ?: provider
+                name.isNullOrBlank() || name == provider -> provider
+                else -> "$provider · $name"
+            }
+            val mount = SafMount(java.util.UUID.randomUUID().toString().replace("-", "").take(8), label, uriStr)
+            updated = updated + mount
+            changed = true
+        }
+        if (changed) {
+            safMounts = updated
+            settings.safMounts = updated
+        }
+    }
+
     private fun refreshMounts() {
         safMounts = settings.safMounts // other windows may have (un)mounted locations
+        syncPersistedSafMounts()
         val saved = servers.saved()
         val currentMounts = computeMounts(saved)
         val driveAccs = GoogleDriveManager.discoverAccounts(app, safMounts)
-        val phone = PhoneDetector.detectPairedPhone(app, currentMounts)
+        val phone = PhoneDetector.detectPairedPhone(app, currentMounts, safMounts)
         _state.update { it.copy(
             savedServers = saved,
             mounts = currentMounts,
@@ -970,7 +1032,10 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
         val path = FsPath.zipSplit(p)?.first ?: p
         if (FsPath.isVirtual(path)) return
         // Stop at the sidebar roots so we never list (and maybe prompt for) folders above a mount's base path.
-        val rootPaths = _state.value.roots.map { it.path } + _state.value.network.map { it.path }
+        val rootPaths = _state.value.roots.map { it.path } +
+            _state.value.network.map { it.path } +
+            _state.value.mounts.map { it.path } +
+            listOfNotNull(_state.value.pairedPhone?.path).filter { it != FsPath.PHONE_ROOT }
         if (rootPaths.none { FsPath.isWithin(it, path) }) return
         var cur = FsPath.parent(path)
         while (cur != null && cur != FsPath.SMB_ROOT) {
@@ -1566,6 +1631,22 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
         } else {
             requestMountSaf(acc.email)
         }
+    }
+
+    fun openPairedPhone(phone: com.droid.wayfinder.data.PairedPhone) {
+        if (phone.isMounted && phone.path != FsPath.PHONE_ROOT) {
+            navigate(phone.path)
+        } else {
+            navigate(FsPath.PHONE_ROOT)
+        }
+    }
+
+    fun requestMountPhoneStorage(phone: com.droid.wayfinder.data.PairedPhone? = _state.value.pairedPhone) {
+        val targetAuth = phone?.authority ?: PhoneDetector.QUICK_ACCESS_AUTHORITY
+        val initialUri = runCatching {
+            android.provider.DocumentsContract.buildRootsUri(targetAuth)
+        }.getOrNull()
+        emit(UiEvent.PickDocumentTree(initialUri = initialUri))
     }
 
     fun requestMountSaf(accountEmail: String? = null) {

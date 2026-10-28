@@ -317,12 +317,21 @@ fun driveAccountMenu(vm: BrowserViewModel, acc: com.droid.wayfinder.data.DriveAc
     }
 }
 
-fun phoneMenu(vm: BrowserViewModel, phone: com.droid.wayfinder.data.PairedPhone): List<MenuEntry> = listOf(
-    item("Open", Icons.Outlined.Smartphone) { vm.navigate(phone.path) },
-    item("Open in new tab", Icons.Outlined.Tab) { vm.newTab(phone.path, activate = true) },
-    item("Open in new window", Icons.Outlined.Web) { vm.newWindow(phone.path) },
-    item("Mount phone storage via SAF…", Icons.Outlined.AddToDrive) { vm.requestMountSaf() },
-    item("Quick Share folder", Icons.Outlined.Folder) { vm.openQuickShareFolder() },
-    item("Phone Hub settings", Icons.Outlined.Settings) { vm.openPhoneHubSettings() },
-)
+fun phoneMenu(vm: BrowserViewModel, phone: com.droid.wayfinder.data.PairedPhone, mount: Mount? = null): List<MenuEntry> = buildList {
+    add(item("Open", Icons.Outlined.Smartphone) { vm.openPairedPhone(phone) })
+    if (phone.isMounted && phone.path != FsPath.PHONE_ROOT) {
+        add(item("Open in new tab", Icons.Outlined.Tab) { vm.newTab(phone.path, activate = true) })
+        add(item("Open in new window", Icons.Outlined.Web) { vm.newWindow(phone.path) })
+        if (mount != null) {
+            add(MenuEntry.Divider)
+            add(item("Unmount", Icons.Outlined.Eject) { vm.eject(mount) })
+            add(item("Forget", Icons.Outlined.Close) { vm.forgetMount(mount) })
+        }
+    } else {
+        add(item("Connect phone storage (SAF)…", Icons.Outlined.AddToDrive) { vm.requestMountPhoneStorage(phone) })
+    }
+    add(MenuEntry.Divider)
+    add(item("Quick Share folder", Icons.Outlined.Folder) { vm.openQuickShareFolder() })
+    add(item("Phone Hub settings", Icons.Outlined.Settings) { vm.openPhoneHubSettings() })
+}
 

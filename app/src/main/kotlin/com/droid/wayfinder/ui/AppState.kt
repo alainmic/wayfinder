@@ -145,7 +145,11 @@ data class AppState(
     /** The non-focused pane in dual-pane mode. */
     val otherPane: TabState? get() = if (!dualPane || secondary == null) null else if (rightActive) mainTab else secondary
     fun tabById(id: Long): TabState? = tabs.firstOrNull { it.id == id } ?: secondary?.takeIf { it.id == id }
-    val rootLabels: Map<String, String> get() = roots.associate { it.path to it.label } + mounts.associate { it.path to it.label }
+    val rootLabels: Map<String, String>
+        get() = roots.associate { it.path to it.label } +
+            mounts.associate { it.path to it.label } +
+            pairedPhone?.takeIf { it.isMounted && it.path != com.droid.wayfinder.data.FsPath.PHONE_ROOT }
+                ?.let { mapOf(it.path to it.name) }.orEmpty()
 
     fun titleOf(path: String): String = when {
         com.droid.wayfinder.data.FsPath.isVirtual(path) -> com.droid.wayfinder.data.FsPath.name(path)

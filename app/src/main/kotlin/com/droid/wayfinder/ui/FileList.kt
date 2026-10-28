@@ -326,14 +326,20 @@ private fun EmptyView(vm: BrowserViewModel, s: AppState, tab: TabState) {
             tab.path == FsPath.RECENTS_ROOT -> CenterMessage(Icons.Outlined.History, "No recent files", "Files changed in the last 30 days appear here.")
             tab.path == FsPath.STARRED_ROOT -> CenterMessage(Icons.Outlined.StarOutline, "No starred items", "Right-click a file or folder and choose “Add to Starred”.")
             tab.path == FsPath.PHONE_ROOT -> CenterMessage(
-                Icons.Outlined.Smartphone, s.pairedPhone?.name ?: "Pixel 9",
-                "No files found in phone storage.",
+                Icons.Outlined.Smartphone,
+                s.pairedPhone?.name ?: "Connect Phone Storage",
+                if (s.pairedPhone != null && !s.pairedPhone.isMounted) {
+                    "Grant access to browse ${s.pairedPhone.name}'s files, or enable File access in Cross-Device Services (Phone Hub) or USB File Transfer (MTP)."
+                } else {
+                    "No phone storage is currently mounted. Link your phone in Cross-Device Services (Phone Hub) or connect via USB File Transfer (MTP)."
+                },
             ) {
-                Button({ vm.openQuickShareFolder() }) {
-                    Icon(Icons.Outlined.Folder, null, Modifier.size(18.dp))
-                    Text("Open Quick Share folder", Modifier.padding(start = 6.dp))
+                Button({ vm.requestMountPhoneStorage() }) {
+                    Icon(Icons.Outlined.Smartphone, null, Modifier.size(18.dp))
+                    Text("Connect phone storage…", Modifier.padding(start = 6.dp))
                 }
                 OutlinedButton({ vm.openPhoneHubSettings() }) { Text("Phone Hub settings") }
+                OutlinedButton({ vm.openQuickShareFolder() }) { Text("Quick Share folder") }
             }
             FsPath.tagOf(tab.path) != null -> CenterMessage(Icons.Outlined.Label, "Nothing tagged “${FsPath.name(tab.path)}”", "Right-click items and choose Color tags to label them.")
             FsPath.isZip(tab.path) -> CenterMessage(Icons.Outlined.FolderOpen, "This folder in the archive is empty", null)

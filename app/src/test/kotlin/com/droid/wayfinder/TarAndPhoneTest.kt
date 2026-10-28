@@ -169,6 +169,46 @@ class TarAndPhoneTest {
     }
 
     @Test
+    fun testPhoneDetectorReturnsNullWhenNoPhoneConnected() {
+        val pfs = com.droid.wayfinder.data.PhoneFileSystem(null, null)
+        assertEquals(null, pfs.resolveRealDirectory())
+        // In production mode with no phone connected, PhoneFileSystem must NEVER map to local host storage
+        assertTrue(pfs.list(FsPath.PHONE_ROOT).isEmpty())
+        try {
+            pfs.list("phone://Download")
+            org.junit.Assert.fail("Expected IOException when phone storage is disconnected")
+        } catch (_: java.io.IOException) {}
+
+        org.junit.Assert.assertFalse(com.droid.wayfinder.data.PhoneDetector.isPhoneMount("Internal Storage"))
+        org.junit.Assert.assertFalse(com.droid.wayfinder.data.PhoneDetector.isPhoneMount("USB 10/100/1G/2.5G LAN"))
+        org.junit.Assert.assertFalse(com.droid.wayfinder.data.PhoneDetector.isPhoneMount("4-Port USB 3.0 Hub"))
+        org.junit.Assert.assertFalse(com.droid.wayfinder.data.PhoneDetector.isPhoneMount("Dell Pro TBT4 Smart Dock"))
+        assertTrue(com.droid.wayfinder.data.PhoneDetector.isPhoneMount("Pixel 9 MTP"))
+        assertTrue(com.droid.wayfinder.data.PhoneDetector.isPhoneAuthority(com.droid.wayfinder.data.PhoneDetector.QUICK_ACCESS_AUTHORITY))
+        assertTrue(com.droid.wayfinder.data.PhoneDetector.isPhoneAuthority(com.droid.wayfinder.data.PhoneDetector.MTP_AUTHORITY))
+        org.junit.Assert.assertFalse(com.droid.wayfinder.data.PhoneDetector.isPhoneAuthority("com.google.android.apps.docs.storage"))
+
+        // PHONE_ROOT virtual placeholder is read-only whereas QuickAccess and MTP document providers support read-write
+        assertTrue(FsPath.isReadOnly(FsPath.PHONE_ROOT))
+        org.junit.Assert.assertFalse(FsPath.isReadOnly("doc://${com.droid.wayfinder.data.PhoneDetector.QUICK_ACCESS_AUTHORITY}/device123//Download"))
+        org.junit.Assert.assertFalse(FsPath.isReadOnly("doc://${com.droid.wayfinder.data.PhoneDetector.MTP_AUTHORITY}/root1/Download"))
+
+        // QuickAccess double-slash documentId preservation and parent resolution
+        val qaAuth = com.droid.wayfinder.data.PhoneDetector.QUICK_ACCESS_AUTHORITY
+        val qaRoot = "doc://$qaAuth/7e95d900-726a-46d4-ab90-111dd666ba85"
+        val qaDownload = "doc://$qaAuth/7e95d900-726a-46d4-ab90-111dd666ba85//Download"
+        val qaSub = "doc://$qaAuth/7e95d900-726a-46d4-ab90-111dd666ba85//Download/Nearby Share"
+        assertEquals(qaDownload, FsPath.normalize(qaDownload))
+        assertEquals(qaDownload, FsPath.parent(qaSub))
+        assertEquals(qaRoot, FsPath.parent(qaDownload))
+        assertEquals(null, FsPath.parent(qaRoot))
+        assertEquals(
+            "7e95d900-726a-46d4-ab90-111dd666ba85//Download",
+            com.droid.wayfinder.data.SystemDocumentsBridge.normalizeDocId(qaAuth, "7e95d900-726a-46d4-ab90-111dd666ba85/Download")
+        )
+    }
+
+    @Test
     fun testTarSecurityRejectsTraversalAndSymlinks() = runBlocking {
         val tarGzFile = tmp.newFile("malicious.tar.gz")
         FileOutputStream(tarGzFile).use { fos ->

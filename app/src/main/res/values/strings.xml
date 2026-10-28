@@ -1,3 +1,7 @@
 <resources>
-    <string name="app_name">Wayfinder</string>
+    <string name="app_name" description="Application launcher name displayed on the home screen and window title bar [CHAR_LIMIT=24]">Wayfinder</string>
+    <string name="nav_recents" description="Sidebar navigation item label for recently modified files [CHAR_LIMIT=24]">Recents</string>
+    <string name="nav_starred" description="Sidebar navigation item label for starred/bookmarked files and folders [CHAR_LIMIT=24]">Starred</string>
+    <string name="nav_trash" description="Sidebar navigation item label for the Trash folder [CHAR_LIMIT=24]">Trash</string>
+    <string name="search_placeholder" description="Placeholder text shown inside the toolbar search input field [CHAR_LIMIT=32]">Search files</string>
 </resources>

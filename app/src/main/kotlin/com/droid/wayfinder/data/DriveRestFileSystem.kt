@@ -28,7 +28,7 @@ import java.util.concurrent.ConcurrentHashMap
  * Top-level "My Drive": `gdrive://<email>/root`
  */
 class DriveRestFileSystem(
-    private val context: Context,
+    private val context: Context? = null,
     private val client: OkHttpClient = OkHttpClient(),
     private val tokenOverride: ((String) -> String?)? = null,
 ) : RemoteFileSystem {
@@ -53,7 +53,7 @@ class DriveRestFileSystem(
         tokenCache[email.lowercase()]?.let { return it }
 
         return runCatching {
-            val am = AccountManager.get(context) ?: throw IOException("AccountManager unavailable")
+            val am = context?.let { AccountManager.get(it) } ?: throw IOException("AccountManager unavailable")
             val account = android.accounts.Account(email, "com.google")
 
             val scope = "oauth2:https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive"
@@ -67,7 +67,7 @@ class DriveRestFileSystem(
         }.getOrElse { e ->
             throw IOException(
                 "Google Drive authorization required for $email: ${e.message ?: "Authentication failed"}. " +
-                    "Make sure SHA-1 (43:ED:0A:A8:BA:17:98:ED:88:81:34:BB:78:33:17:EB:D7:02:36:04) is registered in Google Cloud Console.",
+                    "Ensure an OAuth 2.0 Android client ID for this app's signing certificate is configured, or mount Google Drive via Add folder.",
                 e,
             )
         }

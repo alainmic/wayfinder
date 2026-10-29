@@ -3,8 +3,19 @@
 
 package com.droid.wayfinder.data
 
-/** What the app that launched us with GET_CONTENT / OPEN_DOCUMENT asked for. */
-data class PickerRequest(val allowMultiple: Boolean = false, val mimeTypes: List<String> = emptyList()) {
+enum class PickerMode {
+    OpenFile,
+    OpenTree,
+    CreateDocument,
+}
+
+/** What the app that launched us with GET_CONTENT / OPEN_DOCUMENT / OPEN_DOCUMENT_TREE / CREATE_DOCUMENT asked for. */
+data class PickerRequest(
+    val allowMultiple: Boolean = false,
+    val mimeTypes: List<String> = emptyList(),
+    val mode: PickerMode = PickerMode.OpenFile,
+    val suggestedName: String = "",
+) {
     /** Human-readable summary of [mimeTypes] ("images", "PDF documents", ...), or null for any file. */
     val description: String?
         get() = mimeTypes.filter { it != "*/*" }.takeIf { it.isNotEmpty() }?.joinToString(", ") { m ->

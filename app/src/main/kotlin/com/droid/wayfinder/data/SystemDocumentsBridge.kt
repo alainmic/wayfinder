@@ -3,14 +3,23 @@
 
 package com.droid.wayfinder.data
 
+import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
+import android.database.ContentObserver
+import android.database.Cursor
 import android.net.Uri
+import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.DocumentsContract
 import android.util.Log
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 data class DiscoveredRoot(
     val authority: String,
@@ -22,7 +31,176 @@ data class DiscoveredRoot(
 )
 
 object SystemDocumentsBridge {
+    const val EXTERNAL_STORAGE_AUTHORITY = "com.android.externalstorage.documents"
     private const val TAG = "SystemDocumentsBridge"
+    private val displayNames = ConcurrentHashMap<String, String>()
+    private val parents = ConcurrentHashMap<String, String>()
+
+    fun registerNode(path: String, displayName: String, parentPath: String? = null) {
+        val norm = FsPath.normalize(path)
+        if (displayName.isNotBlank()) {
+            displayNames[norm] = displayName
+        }
+        if (parentPath != null) {
+            parents[norm] = FsPath.normalize(parentPath)
+        }
+    }
+
+    fun displayNameOf(path: String): String? = displayNames[FsPath.normalize(path)]
+
+    fun parentOf(path: String): String? {
+        val norm = FsPath.normalize(path)
+        parents[norm]?.let { return it }
+        val trimmed = norm.removePrefix("doc://")
+        val auth = trimmed.substringBefore('/')
+        val docId = trimmed.substringAfter('/', "")
+        if (docId.isEmpty() || !docId.contains('/')) return null
+        if (docId.contains("//")) {
+            val deviceId = docId.substringBefore("//")
+            val remotePath = docId.substringAfter("//")
+            if (remotePath.isEmpty()) return null
+            return if (!remotePath.contains('/')) {
+                "doc://$auth/$deviceId"
+            } else {
+                "doc://$auth/$deviceId//${remotePath.substringBeforeLast('/')}"
+            }
+        }
+        return "doc://$auth/${docId.substringBeforeLast('/')}"
+    }
+
+    /**
+     * Splits a synthetic child path `doc://<authority>/<parentDocId>/<newName>` (constructed via
+     * [FsPath.join]) into `(authority, parentDocId, newName)` without corrupting opaque [parentDocId]
+     * tokens that do not contain `/`.
+     */
+    fun splitParentAndChild(path: String): Triple<String, String, String>? {
+        val norm = FsPath.normalize(path)
+        val trimmed = norm.removePrefix("doc://")
+        val auth = trimmed.substringBefore('/')
+        val rest = trimmed.substringAfter('/', "")
+        if (auth.isBlank() || rest.isBlank()) return null
+        val explicitParent = parents[norm]
+        if (explicitParent != null) {
+            val parentDocId = explicitParent.removePrefix("doc://$auth/")
+            val name = rest.removePrefix("$parentDocId/").substringAfterLast('/')
+            if (parentDocId.isNotBlank() && name.isNotBlank()) {
+                return Triple(auth, parentDocId, name)
+            }
+        }
+        if (!rest.contains('/')) return null
+        val parentDocId = rest.substringBeforeLast('/')
+        val name = rest.substringAfterLast('/')
+        if (parentDocId.isBlank() || name.isBlank()) return null
+        return Triple(auth, parentDocId, name)
+    }
+
+    /**
+     * Converts a Wayfinder path (`local` `/storage/...`, `doc://...`, or `saf://...`) into a
+     * [DocumentsContract] URI (document URI when [tree] is false, tree URI when [tree] is true),
+     * or returns null if the path cannot be represented as a DocumentsContract URI.
+     */
+    fun toDocumentsContractUri(
+        path: String,
+        tree: Boolean = false,
+        safMounts: List<SafMount> = emptyList(),
+        primaryStorageRoot: String = runCatching { Environment.getExternalStorageDirectory().path }.getOrDefault("/storage/emulated/0"),
+    ): Uri? {
+        val norm = FsPath.normalize(path)
+        if (norm.startsWith("doc://")) {
+            val trimmed = norm.removePrefix("doc://")
+            val auth = trimmed.substringBefore('/')
+            val docId = trimmed.substringAfter('/', "")
+            if (auth.isBlank() || docId.isBlank()) return null
+            return if (tree) {
+                DocumentsContract.buildTreeDocumentUri(auth, docId)
+            } else {
+                DocumentsContract.buildDocumentUri(auth, docId)
+            }
+        }
+        if (norm.startsWith("saf://")) {
+            val rem = norm.removePrefix("saf://")
+            val id = rem.substringBefore('/')
+            val rel = rem.substringAfter('/', "").trim('/')
+            val mount = safMounts.firstOrNull { it.id == id } ?: return null
+            val treeUri = runCatching { Uri.parse(mount.uri) }.getOrNull() ?: return null
+            val baseDocId = runCatching { DocumentsContract.getTreeDocumentId(treeUri) }.getOrNull() ?: return null
+            val targetDocId = if (rel.isEmpty()) baseDocId else "$baseDocId/$rel"
+            return if (tree && rel.isEmpty()) {
+                treeUri
+            } else if (tree) {
+                DocumentsContract.buildTreeDocumentUri(treeUri.authority, targetDocId)
+            } else {
+                DocumentsContract.buildDocumentUriUsingTree(treeUri, targetDocId)
+            }
+        }
+        if (!FsPath.isLocalFile(norm)) return null
+        val primaryNorm = FsPath.normalize(primaryStorageRoot)
+        if (norm == primaryNorm || norm.startsWith("$primaryNorm/")) {
+            val rel = norm.removePrefix(primaryNorm).trimStart('/')
+            val docId = "primary:$rel"
+            return if (tree) {
+                DocumentsContract.buildTreeDocumentUri(EXTERNAL_STORAGE_AUTHORITY, docId)
+            } else {
+                DocumentsContract.buildDocumentUri(EXTERNAL_STORAGE_AUTHORITY, docId)
+            }
+        }
+        if (norm.startsWith("/storage/")) {
+            val afterStorage = norm.removePrefix("/storage/")
+            val volume = afterStorage.substringBefore('/')
+            if (volume.isNotBlank() && volume != "emulated" && volume != "self") {
+                val rel = afterStorage.substringAfter('/', "")
+                val docId = "$volume:$rel"
+                return if (tree) {
+                    DocumentsContract.buildTreeDocumentUri(EXTERNAL_STORAGE_AUTHORITY, docId)
+                } else {
+                    DocumentsContract.buildDocumentUri(EXTERNAL_STORAGE_AUTHORITY, docId)
+                }
+            }
+        }
+        return null
+    }
+
+    /**
+     * Converts an incoming [DocumentsContract] root, tree, or document [uri] (from `ACTION_BROWSE`
+     * or `ACTION_MANAGE_DOCUMENT`) into a navigable Wayfinder path.
+     */
+    fun toWayfinderPath(
+        uri: Uri?,
+        primaryStorageRoot: String = runCatching { Environment.getExternalStorageDirectory().path }.getOrDefault("/storage/emulated/0"),
+    ): String? {
+        if (uri == null || uri.scheme != ContentResolver.SCHEME_CONTENT) return null
+        val auth = uri.authority?.takeIf { it.isNotBlank() } ?: return null
+        val docId = runCatching {
+            val segs = uri.pathSegments.orEmpty()
+            val docIdx = segs.indexOf("document")
+            val treeIdx = segs.indexOf("tree")
+            val rootIdx = segs.indexOf("root")
+            when {
+                docIdx >= 0 && docIdx + 1 < segs.size -> segs[docIdx + 1]
+                treeIdx >= 0 && treeIdx + 1 < segs.size -> segs[treeIdx + 1]
+                rootIdx >= 0 && rootIdx + 1 < segs.size -> {
+                    val rootId = segs[rootIdx + 1]
+                    if (auth == EXTERNAL_STORAGE_AUTHORITY && rootId == "primary") "primary:" else rootId
+                }
+                else -> null
+            }
+        }.getOrNull() ?: return null
+
+        if (auth == EXTERNAL_STORAGE_AUTHORITY) {
+            if (docId.startsWith("primary:")) {
+                val rel = docId.removePrefix("primary:").trimStart('/')
+                return if (rel.isEmpty()) primaryStorageRoot else FsPath.child(primaryStorageRoot, rel)
+            }
+            if (docId.contains(':')) {
+                val vol = docId.substringBefore(':')
+                val rel = docId.substringAfter(':').trimStart('/')
+                if (vol.isNotBlank() && !vol.contains('/')) {
+                    return if (rel.isEmpty()) "/storage/$vol" else "/storage/$vol/$rel"
+                }
+            }
+        }
+        return "doc://$auth/$docId"
+    }
 
     /** Discovers all accessible DocumentsProvider roots on the system. */
     fun discoverRoots(context: Context): List<DiscoveredRoot> {
@@ -48,9 +226,12 @@ object SystemDocumentsBridge {
                         val docId = if (docIdCol >= 0) c.getString(docIdCol) else ""
                         val flags = if (flagsCol >= 0) c.getInt(flagsCol) else 0
                         val summary = if (summaryCol >= 0) c.getString(summaryCol) else null
-                        val root = DiscoveredRoot(auth, rootId, title, docId, flags, summary)
-                        roots.add(root)
-                        Log.d(TAG, "Discovered root: auth=$auth, title=$title, rootId=$rootId, docId=$docId")
+                        if (docId.isNotBlank()) {
+                            val root = DiscoveredRoot(auth, rootId, title, docId, flags, summary)
+                            registerNode("doc://$auth/$docId", title.ifBlank { auth }, parentPath = null)
+                            roots.add(root)
+                            Log.d(TAG, "Discovered root: auth=$auth, title=$title, rootId=$rootId, docId=$docId")
+                        }
                     }
                 }
             }.onFailure { e ->
@@ -63,6 +244,7 @@ object SystemDocumentsBridge {
     /** Lists children of [documentId] under [authority] using direct DocumentsContract query. */
     fun listChildren(context: Context, authority: String, documentId: String): List<FileEntry>? {
         return runCatching {
+            val parentPath = "doc://$authority/$documentId"
             val childrenUri = DocumentsContract.buildChildDocumentsUri(authority, documentId)
             context.contentResolver.query(childrenUri, null, null, null, null)?.use { c ->
                 val docIdCol = c.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
@@ -77,17 +259,19 @@ object SystemDocumentsBridge {
                     val name = safeDisplayName(c.getString(nameCol)) ?: continue
                     val mime = c.getString(mimeCol) ?: ""
                     val isDir = mime == DocumentsContract.Document.MIME_TYPE_DIR
-                    val size = if (isDir) 0L else c.getLong(sizeCol).coerceAtLeast(0L)
-                    val mod = c.getLong(modCol)
+                    val size = if (isDir || c.isNull(sizeCol)) 0L else c.getLong(sizeCol).coerceAtLeast(0L)
+                    val mod = if (c.isNull(modCol)) 0L else c.getLong(modCol)
+                    val childPath = "doc://$authority/$childDocId"
+                    registerNode(childPath, name, parentPath)
 
                     list.add(
                         FileEntry(
-                            path = "doc://$authority/$childDocId",
+                            path = childPath,
                             name = name,
                             isDir = isDir,
                             size = size,
                             modified = if (mod > 0) mod else System.currentTimeMillis(),
-                            subtitle = if (authority.contains("mtp") || authority.contains("phone")) "Pixel 9" else "Documents",
+                            subtitle = if (authority.contains("mtp") || authority.contains("phone")) "Connected Phone" else "Documents",
                         )
                     )
                 }
@@ -145,33 +329,59 @@ class DocFileSystem(private val context: Context) : RemoteFileSystem {
         val trimmed = path.removePrefix("doc://")
         val auth = trimmed.substringBefore('/')
         val docId = trimmed.substringAfter('/')
-        val docUri = DocumentsContract.buildDocumentUri(auth, docId)
-        return context.contentResolver.openOutputStream(docUri)
+        val targetDocId = if (stat(path) != null) {
+            docId
+        } else {
+            val (_, parentDocId, name) = SystemDocumentsBridge.splitParentAndChild(path)
+                ?: throw IOException("Invalid parent folder for $path")
+            val ext = name.substringAfterLast('.', "").lowercase()
+            val mime = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+                ?: "application/octet-stream"
+            val parentUri = DocumentsContract.buildDocumentUri(auth, parentDocId)
+            val createdUri = DocumentsContract.createDocument(context.contentResolver, parentUri, mime, name)
+                ?: throw IOException("Cannot create $name in $parentDocId")
+            val createdId = DocumentsContract.getDocumentId(createdUri)
+            SystemDocumentsBridge.registerNode("doc://$auth/$createdId", name, "doc://$auth/$parentDocId")
+            createdId
+        }
+        val docUri = DocumentsContract.buildDocumentUri(auth, targetDocId)
+        return runCatching { context.contentResolver.openOutputStream(docUri, "w") }.getOrNull()
+            ?: context.contentResolver.openOutputStream(docUri)
             ?: throw IOException("Cannot write to $path")
     }
 
     override fun mkdir(path: String) {
-        val trimmed = path.removePrefix("doc://")
-        val auth = trimmed.substringBefore('/')
-        val rest = trimmed.substringAfter('/')
-        val name = rest.substringAfterLast('/')
+        val (auth, parentDocId, name) = SystemDocumentsBridge.splitParentAndChild(path)
+            ?: throw IOException("Invalid parent folder for $path")
         FsPath.nameError(name)?.let { throw IOException(it) }
-        val parentDocId = rest.substringBeforeLast('/', "root")
         val parentUri = DocumentsContract.buildDocumentUri(auth, parentDocId)
-        DocumentsContract.createDocument(context.contentResolver, parentUri, DocumentsContract.Document.MIME_TYPE_DIR, name)
+        val createdUri = DocumentsContract.createDocument(context.contentResolver, parentUri, DocumentsContract.Document.MIME_TYPE_DIR, name)
             ?: throw IOException("Failed to create folder $name")
+        val createdId = runCatching { DocumentsContract.getDocumentId(createdUri) }.getOrNull()
+        if (!createdId.isNullOrBlank()) {
+            SystemDocumentsBridge.registerNode("doc://$auth/$createdId", name, "doc://$auth/$parentDocId")
+        }
     }
 
     override fun createFile(path: String) {
-        val trimmed = path.removePrefix("doc://")
-        val auth = trimmed.substringBefore('/')
-        val rest = trimmed.substringAfter('/')
-        val name = rest.substringAfterLast('/')
+        createFileWithMime(path, null)
+    }
+
+    fun createFileWithMime(path: String, explicitMime: String? = null): String {
+        val (auth, parentDocId, name) = SystemDocumentsBridge.splitParentAndChild(path)
+            ?: throw IOException("Invalid parent folder for $path")
         FsPath.nameError(name)?.let { throw IOException(it) }
-        val parentDocId = rest.substringBeforeLast('/', "root")
+        val ext = name.substringAfterLast('.', "").lowercase()
+        val mime = explicitMime?.takeIf { it.isNotBlank() && it != "*/*" }
+            ?: android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+            ?: "application/octet-stream"
         val parentUri = DocumentsContract.buildDocumentUri(auth, parentDocId)
-        DocumentsContract.createDocument(context.contentResolver, parentUri, "application/octet-stream", name)
+        val createdUri = DocumentsContract.createDocument(context.contentResolver, parentUri, mime, name)
             ?: throw IOException("Failed to create file $name")
+        val createdId = runCatching { DocumentsContract.getDocumentId(createdUri) }.getOrDefault("$parentDocId/$name")
+        val createdPath = "doc://$auth/$createdId"
+        SystemDocumentsBridge.registerNode(createdPath, name, "doc://$auth/$parentDocId")
+        return createdPath
     }
 
     override fun delete(path: String) {

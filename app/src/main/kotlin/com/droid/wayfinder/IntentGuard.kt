@@ -24,6 +24,7 @@ object IntentGuard {
     val INTERNAL_EXTRAS = listOf(
         BrowserViewModel.EXTRA_PATH, BrowserViewModel.EXTRA_NEW_WINDOW, BrowserViewModel.EXTRA_PICKER,
         BrowserViewModel.EXTRA_PICKER_MULTIPLE, BrowserViewModel.EXTRA_PICKER_MIME,
+        BrowserViewModel.EXTRA_PICKER_MODE, BrowserViewModel.EXTRA_PICKER_TITLE,
     )
 
     @Volatile private var cached: String? = null

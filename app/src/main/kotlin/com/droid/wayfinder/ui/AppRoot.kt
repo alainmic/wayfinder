@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -135,11 +136,13 @@ fun AppRoot(vm: BrowserViewModel) {
                     if (r == SnackbarResult.ActionPerformed) vm.undo()
                 }
                 is UiEvent.PickDocumentTree -> try {
-                    treeLauncher.launch(e.initialUri)
+                    launchSystemDocumentTreePicker(ctx, e.initialUri) { treeLauncher.launch(e.initialUri) }
                 } catch (_: ActivityNotFoundException) {
                     snackbar.showSnackbar("No document provider is available", duration = SnackbarDuration.Short)
                 }
                 is UiEvent.PickResult -> returnPicked(ctx, e.paths)
+                is UiEvent.PickTreeResult -> returnPickedTree(ctx, e.path, e.uri)
+                is UiEvent.CreateDocumentResult -> returnCreatedDocument(ctx, e.path, e.uri, e.mimeType)
                 UiEvent.PickCancel -> (ctx as? Activity)?.let { a -> a.setResult(Activity.RESULT_CANCELED); a.finish() }
                 UiEvent.Finish -> (ctx as? Activity)?.let { a -> if (vm.state.value.secondaryWindow) a.finishAndRemoveTask() else a.finish() }
             }
@@ -368,46 +371,152 @@ private fun DragGhost(drag: DragController) {
     }
 }
 
-/** Picker mode banner: what the calling app wants, Cancel and "Select File". */
+/** Picker mode banner: supports OpenFile, OpenTree (ACTION_OPEN_DOCUMENT_TREE), and CreateDocument (ACTION_CREATE_DOCUMENT). */
 @Composable
 private fun PickerBanner(vm: BrowserViewModel, s: AppState) {
     val cs = MaterialTheme.colorScheme
     val req = s.picker ?: return
-    // Recomputed on every state change so the button follows the selection.
-    val pickable = remember(s.active.selection, s.active.entries) { vm.pickableSelection() }
     Surface(
         Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), shape = RoundedCornerShape(16.dp),
         color = cs.primaryContainer, contentColor = cs.onPrimaryContainer,
     ) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Icon(Icons.Outlined.FileOpen, null, Modifier.size(20.dp))
-            Column(Modifier.weight(1f)) {
-                Text(if (req.allowMultiple) "Select files to open in the requesting app" else "Select a file to open in the requesting app", style = MaterialTheme.typography.titleSmall)
-                val hint = listOfNotNull(req.description?.let { "Accepts $it" }, if (req.allowMultiple) "Ctrl+click to select several" else null, "Double-click a file to choose it")
-                Text(hint.joinToString("  ·  "), style = MaterialTheme.typography.bodySmall)
-            }
-            OutlinedButton({ vm.cancelPick() }) { Text("Cancel") }
-            Button({ vm.pickSelection() }, enabled = pickable.isNotEmpty()) {
-                Text(if (pickable.size > 1) "Select ${pickable.size} Files" else "Select File")
+            when (req.mode) {
+                com.droid.wayfinder.data.PickerMode.OpenFile -> {
+                    val pickable = remember(s.active.selection, s.active.entries) { vm.pickableSelection() }
+                    Column(Modifier.weight(1f)) {
+                        Text(if (req.allowMultiple) "Select files to open in the requesting app" else "Select a file to open in the requesting app", style = MaterialTheme.typography.titleSmall)
+                        val hint = listOfNotNull(req.description?.let { "Accepts $it" }, if (req.allowMultiple) "Ctrl+click to select several" else null, "Double-click a file to choose it")
+                        Text(hint.joinToString("  ·  "), style = MaterialTheme.typography.bodySmall)
+                    }
+                    OutlinedButton({ vm.cancelPick() }) { Text("Cancel") }
+                    Button({ vm.pickSelection() }, enabled = pickable.isNotEmpty()) {
+                        Text(if (pickable.size > 1) "Select ${pickable.size} Files" else "Select File")
+                    }
+                }
+                com.droid.wayfinder.data.PickerMode.OpenTree -> {
+                    val folderTarget = remember(s.active.path, s.active.selection, s.active.entries) { vm.targetTreeFolder() }
+                    val canGrant = remember(folderTarget) { vm.canPickFolder(folderTarget) }
+                    Column(Modifier.weight(1f)) {
+                        Text("Grant access to folder", style = MaterialTheme.typography.titleSmall)
+                        Text("Allow the requesting app to access ${FsPath.name(folderTarget)}", style = MaterialTheme.typography.bodySmall)
+                    }
+                    OutlinedButton({ vm.cancelPick() }) { Text("Cancel") }
+                    Button({ vm.pickCurrentFolder() }, enabled = canGrant) {
+                        Text("Use this folder")
+                    }
+                }
+                com.droid.wayfinder.data.PickerMode.CreateDocument -> {
+                    val validName = remember(s.createFileName) { FsPath.nameError(s.createFileName.trim()) == null }
+                    Column(Modifier.weight(1f)) {
+                        Text("Save file in ${FsPath.name(s.active.path)}", style = MaterialTheme.typography.titleSmall)
+                        OutlinedTextField(
+                            value = s.createFileName,
+                            onValueChange = vm::setCreateFileName,
+                            singleLine = true,
+                            label = { Text("File name") },
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        )
+                    }
+                    OutlinedButton({ vm.cancelPick() }) { Text("Cancel") }
+                    Button({ vm.confirmCreateDocument() }, enabled = validName) {
+                        Text("Save")
+                    }
+                }
             }
         }
     }
 }
 
-/** Returns picked local files to the calling app as FileProvider URIs (ClipData for several) with read access. */
+private fun launchSystemDocumentTreePicker(ctx: Context, initialUri: android.net.Uri?, fallbackLaunch: () -> Unit) {
+    val a = ctx as? Activity
+    if (a != null) {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            if (initialUri != null && android.os.Build.VERSION.SDK_INT >= 26) {
+                putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI, initialUri)
+            }
+        }
+        val candidates = runCatching { a.packageManager.queryIntentActivities(intent, 0) }.getOrDefault(emptyList())
+        val systemDocUi = candidates.firstOrNull { ri ->
+            val pkg = ri.activityInfo?.packageName.orEmpty()
+            pkg != a.packageName && (pkg.contains("documentsui") || pkg.contains("ScopedStorage"))
+        } ?: candidates.firstOrNull { it.activityInfo?.packageName != a.packageName }
+        if (systemDocUi != null) {
+            fallbackLaunch()
+            return
+        }
+    }
+    fallbackLaunch()
+}
+
+private fun resolveReturnUri(ctx: Context, path: String, preferredUri: android.net.Uri? = null): Pair<android.net.Uri, Boolean> {
+    val docUri = preferredUri ?: com.droid.wayfinder.data.SystemDocumentsBridge.toDocumentsContractUri(path, tree = false)
+    if (docUri != null) {
+        val auth = docUri.authority.orEmpty()
+        val providerInstalled = runCatching { ctx.packageManager.resolveContentProvider(auth, 0) != null }.getOrDefault(false)
+        if (providerInstalled || path.startsWith("doc://") || path.startsWith("saf://")) {
+            return docUri to true
+        }
+    }
+    return FileProvider.getUriForFile(ctx, ctx.packageName + ".fileprovider", File(path)) to false
+}
+
+/** Returns picked files to the calling app as DocumentsContract URIs (or FileProvider fallback) with R/W + persistable grants. */
 private fun returnPicked(ctx: Context, paths: List<String>) {
     val a = ctx as? Activity ?: return
     if (paths.isEmpty()) return
     try {
-        val uris = paths.map { FileProvider.getUriForFile(ctx, ctx.packageName + ".fileprovider", File(it)) }
+        val resolved = paths.map { resolveReturnUri(ctx, it) }
+        val uris = resolved.map { it.first }
+        val anyDocUri = resolved.any { it.second }
         val mime = if (paths.size == 1) MimeTypeMap.getSingleton().getMimeTypeFromExtension(File(paths[0]).extension.lowercase()) ?: "application/octet-stream" else "*/*"
         val clip = ClipData(ClipDescription("Selected files", arrayOf(mime)), ClipData.Item(uris[0]))
         uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
-        val result = Intent().setDataAndType(uris[0], mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        var flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+        if (anyDocUri) {
+            flags = flags or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+        }
+        val result = Intent().setDataAndType(uris[0], mime).addFlags(flags)
         result.clipData = clip
         a.setResult(Activity.RESULT_OK, result)
     } catch (e: Exception) {
         android.widget.Toast.makeText(ctx, "Couldn't share the selected file: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+        a.setResult(Activity.RESULT_CANCELED)
+    }
+    a.finish()
+}
+
+private fun returnPickedTree(ctx: Context, path: String, preferredUri: android.net.Uri?) {
+    val a = ctx as? Activity ?: return
+    try {
+        val treeUri = preferredUri
+            ?: com.droid.wayfinder.data.SystemDocumentsBridge.toDocumentsContractUri(path, tree = true)
+            ?: FileProvider.getUriForFile(ctx, ctx.packageName + ".fileprovider", File(path))
+        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+            Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+            Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or
+            Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
+        val result = Intent().setData(treeUri).addFlags(flags)
+        a.setResult(Activity.RESULT_OK, result)
+    } catch (e: Exception) {
+        android.widget.Toast.makeText(ctx, "Couldn't grant folder access: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+        a.setResult(Activity.RESULT_CANCELED)
+    }
+    a.finish()
+}
+
+private fun returnCreatedDocument(ctx: Context, path: String, preferredUri: android.net.Uri?, mimeType: String) {
+    val a = ctx as? Activity ?: return
+    try {
+        val (uri, _) = resolveReturnUri(ctx, path, preferredUri)
+        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+            Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+            Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+        val result = Intent().setDataAndType(uri, mimeType).addFlags(flags)
+        a.setResult(Activity.RESULT_OK, result)
+    } catch (e: Exception) {
+        android.widget.Toast.makeText(ctx, "Couldn't save file: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
         a.setResult(Activity.RESULT_CANCELED)
     }
     a.finish()

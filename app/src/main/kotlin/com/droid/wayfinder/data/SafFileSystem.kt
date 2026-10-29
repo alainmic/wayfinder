@@ -40,6 +40,7 @@ object SafLabels {
         authority == "com.android.providers.downloads.documents" -> "Downloads"
         authority == "com.android.providers.media.documents" -> "Media"
         authority == "com.android.mtp.documents" -> "Phone"
+        authority == SystemDocumentsBridge.QUICK_ACCESS_AUTHORITY -> "Connected Phone"
         authority.startsWith("com.microsoft.skydrive") -> "OneDrive"
         authority.contains("dropbox", true) -> "Dropbox"
         authority.contains("nextcloud", true) -> "Nextcloud"
@@ -96,12 +97,24 @@ class SafFileSystem(context: Context, private val mounts: () -> List<SafMount>) 
     }
 
     private fun children(m: SafMount, parentId: String): List<Row> {
-        val uri = DocumentsContract.buildChildDocumentsUriUsingTree(tree(m), parentId)
+        val treeUri = tree(m)
+        val uri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentId)
+        val isQuickAccess = treeUri.authority == SystemDocumentsBridge.QUICK_ACCESS_AUTHORITY
         val out = ArrayList<Row>()
-        cr.query(uri, cols, null, null, null)?.use { c ->
+        val usedNames = HashMap<String, Int>()
+        SystemDocumentsBridge.queryWithLoadingWait(
+            cr = cr,
+            uri = uri,
+            projection = cols,
+            maxAttempts = if (isQuickAccess) 8 else 6,
+            waitMs = if (isQuickAccess) 2000L else 1500L,
+        ) { c ->
             while (c.moveToNext()) {
                 // Display names are chosen by the (third-party) provider: never let them act as path separators.
-                val name = safeDisplayName(c.getString(1) ?: continue) ?: continue
+                val rawName = safeDisplayName(c.getString(1) ?: continue) ?: continue
+                val count = usedNames.getOrDefault(rawName, 0) + 1
+                usedNames[rawName] = count
+                val name = if (count == 1) rawName else "$rawName ($count)"
                 out += Row(
                     c.getString(0) ?: continue, name, c.getString(2).orEmpty(),
                     if (c.isNull(3)) 0L else c.getLong(3), if (c.isNull(4)) 0L else c.getLong(4),

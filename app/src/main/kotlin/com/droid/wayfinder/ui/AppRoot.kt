@@ -113,6 +113,11 @@ fun AppRoot(vm: BrowserViewModel) {
 
     // "Mount Cloud / SAF…": the system document-tree picker; access is persisted by the view model.
     val treeLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(vm::mountSaf) }
+    val accountLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+        if (res.resultCode == Activity.RESULT_OK) {
+            vm.onGoogleAccountPicked(res.data?.getStringExtra(android.accounts.AccountManager.KEY_ACCOUNT_NAME))
+        }
+    }
     SideEffect { drag.onDrop = { t, p, copy -> vm.dropOn(t, p, copy) } }
     LaunchedEffect(Unit) { rootFocus.requestFocus() }
     LaunchedEffect(s.dialog == null, s.addressEditing, s.paletteOpen) { if (s.dialog == null && !s.addressEditing && !s.paletteOpen) runCatching { rootFocus.requestFocus() } }
@@ -138,6 +143,15 @@ fun AppRoot(vm: BrowserViewModel) {
                     treeLauncher.launch(e.initialUri)
                 } catch (_: ActivityNotFoundException) {
                     snackbar.showSnackbar("No document provider is available", duration = SnackbarDuration.Short)
+                }
+                UiEvent.PickGoogleAccount -> try {
+                    @Suppress("DEPRECATION")
+                    val intent = android.accounts.AccountManager.newChooseAccountIntent(
+                        null, null, arrayOf("com.google"), null, null, null, null,
+                    )
+                    accountLauncher.launch(intent)
+                } catch (_: ActivityNotFoundException) {
+                    vm.requestMountSaf()
                 }
                 is UiEvent.PickResult -> returnPicked(ctx, e.paths)
                 UiEvent.PickCancel -> (ctx as? Activity)?.let { a -> a.setResult(Activity.RESULT_CANCELED); a.finish() }

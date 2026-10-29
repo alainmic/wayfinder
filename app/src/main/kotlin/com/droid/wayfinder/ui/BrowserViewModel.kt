@@ -712,13 +712,25 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
     }
 
     private fun openFile(path: String, chooser: Boolean = false) {
-        if (FsPath.isLocalFile(path)) { emit(UiEvent.OpenFile(path, chooser)); return }
+        if (FsPath.isLocalFile(path)) {
+            if (isUnsafeToExpose(path)) { toast("This file can't be opened"); return }
+            emit(UiEvent.OpenFile(path, chooser))
+            return
+        }
         // Network files are downloaded and archive entries extracted to the cache, then opened from there.
         val zip = FsPath.isZip(path)
-        val dir = File(app.cacheDir, "${if (zip) "zip-open" else "remote-open"}/${path.hashCode().toUInt()}").apply { mkdirs() }
+        val dir = File(app.cacheDir, "${if (zip) "zip-open" else "remote-open"}/${cacheKeyFor(path)}").apply { mkdirs() }
         launchOp(if (zip) "Extracting" else "Downloading", { report ->
             ops.transfer(listOf(path), dir.path, move = false, conflict = Conflict.Replace, onProgress = report)
-        }) { emit(UiEvent.OpenFile(File(dir, FsPath.name(path)).path, chooser)) }
+        }) { res ->
+            val target = res.firstOrNull()?.target ?: File(dir, FileInfo.sanitizeFileName(FsPath.name(path), "file")).path
+            emit(UiEvent.OpenFile(target, chooser))
+        }
+    }
+
+    private fun cacheKeyFor(path: String): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(path.toByteArray(Charsets.UTF_8))
+        return digest.take(16).joinToString("") { "%02x".format(it) }
     }
 
     // ---------------------------------------------------------------- selection & focus
@@ -1272,7 +1284,9 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
 
     fun share() {
         val files = tab.selectedEntries(hidden).filter { !it.isDir && FsPath.isLocalFile(it.path) }.map { it.path }
-        if (files.isEmpty()) toast("Select local files to share") else emit(UiEvent.Share(files))
+        if (files.isEmpty()) { toast("Select local files to share"); return }
+        if (files.any { isUnsafeToExpose(it) }) { toast("This file can't be shared"); return }
+        emit(UiEvent.Share(files))
     }
 
     fun copyPathToClipboard() {
@@ -1659,8 +1673,8 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
         if (files.isEmpty()) { toast("Select a file"); return }
         if (!p.allowMultiple && files.size > 1) { toast("The requesting app accepts a single file"); return }
         if (files.any { !acceptsForPick(it) }) { toast("The requesting app expects ${p.description ?: "a different kind of file"}"); return }
-        // Never hand out the app's private files (settings, saved servers) to the requesting app.
-        if (files.any { FsPath.isLocalFile(it.path) && isPrivatePath(it.path) }) { toast("This file can't be shared"); return }
+        // Never hand out symbolic links or the app's private files (settings, saved servers) to external apps.
+        if (files.any { FsPath.isLocalFile(it.path) && isUnsafeToExpose(it.path) }) { toast("This file can't be shared"); return }
         val local = files.filter { FsPath.isLocalFile(it.path) }.map { it.path }
         val remote = files.filter { !FsPath.isLocalFile(it.path) }.map { it.path }
         if (remote.isEmpty()) { emit(UiEvent.PickResult(local)); return }
@@ -1674,6 +1688,12 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
     }
 
     fun cancelPick() = emit(UiEvent.PickCancel)
+
+    /** True for symbolic links or files resolving inside the app's private storage, which must never leave the app. */
+    private fun isUnsafeToExpose(path: String): Boolean {
+        if (FileInfo.isSymlink(path)) return true
+        return isPrivatePath(path)
+    }
 
     /** True for files in the app's internal storage (resolving links), which must never leave the app. */
     private fun isPrivatePath(path: String): Boolean {

@@ -394,12 +394,20 @@ private fun PickerBanner(vm: BrowserViewModel, s: AppState) {
     }
 }
 
+/** Resolves [path] to a canonical file and rejects symbolic links so FileProvider cannot be bypassed via links. */
+private fun safeFileProviderTarget(path: String): File {
+    if (com.droid.wayfinder.data.FileInfo.isSymlink(path)) {
+        throw IllegalArgumentException("Symbolic links cannot be shared with external apps")
+    }
+    return File(path).canonicalFile
+}
+
 /** Returns picked local files to the calling app as FileProvider URIs (ClipData for several) with read access. */
 private fun returnPicked(ctx: Context, paths: List<String>) {
     val a = ctx as? Activity ?: return
     if (paths.isEmpty()) return
     try {
-        val uris = paths.map { FileProvider.getUriForFile(ctx, ctx.packageName + ".fileprovider", File(it)) }
+        val uris = paths.map { FileProvider.getUriForFile(ctx, ctx.packageName + ".fileprovider", safeFileProviderTarget(it)) }
         val mime = if (paths.size == 1) MimeTypeMap.getSingleton().getMimeTypeFromExtension(File(paths[0]).extension.lowercase()) ?: "application/octet-stream" else "*/*"
         val clip = ClipData(ClipDescription("Selected files", arrayOf(mime)), ClipData.Item(uris[0]))
         uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
@@ -430,7 +438,7 @@ private fun openNewWindow(ctx: Context, path: String?) {
 private fun openWithSystem(ctx: Context, path: String, chooser: Boolean = false) {
     val f = File(path)
     // The provider only serves shared storage and our download caches (see res/xml/file_paths.xml).
-    val uri = try { FileProvider.getUriForFile(ctx, ctx.packageName + ".fileprovider", f) } catch (_: IllegalArgumentException) {
+    val uri = try { FileProvider.getUriForFile(ctx, ctx.packageName + ".fileprovider", safeFileProviderTarget(path)) } catch (_: Exception) {
         android.widget.Toast.makeText(ctx, "${f.name} can't be opened by other apps from this location", android.widget.Toast.LENGTH_SHORT).show()
         return
     }
@@ -448,7 +456,7 @@ private fun openWithSystem(ctx: Context, path: String, chooser: Boolean = false)
 }
 
 private fun shareFiles(ctx: Context, paths: List<String>) {
-    val uris = try { ArrayList(paths.map { FileProvider.getUriForFile(ctx, ctx.packageName + ".fileprovider", File(it)) }) } catch (_: IllegalArgumentException) {
+    val uris = try { ArrayList(paths.map { FileProvider.getUriForFile(ctx, ctx.packageName + ".fileprovider", safeFileProviderTarget(it)) }) } catch (_: Exception) {
         android.widget.Toast.makeText(ctx, "These files can't be shared from this location", android.widget.Toast.LENGTH_SHORT).show()
         return
     }

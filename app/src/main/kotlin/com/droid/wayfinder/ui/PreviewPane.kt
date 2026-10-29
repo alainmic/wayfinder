@@ -33,6 +33,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -141,7 +146,13 @@ private fun MarksEditor(vm: BrowserViewModel, s: AppState, e: FileEntry) {
         Text("Tags", Modifier.width(84.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(
-                Modifier.size(24.dp).clip(CircleShape).clickable { vm.toggleStar(listOf(e.path)) },
+                Modifier.size(24.dp)
+                    .semantics {
+                        role = Role.Checkbox
+                        this.selected = starred
+                    }
+                    .clip(CircleShape)
+                    .clickable(onClickLabel = if (starred) "Remove from Starred" else "Add to Starred") { vm.toggleStar(listOf(e.path)) },
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(if (starred) Icons.Filled.Star else Icons.Outlined.StarOutline, if (starred) "Remove from Starred" else "Add to Starred",
@@ -150,9 +161,16 @@ private fun MarksEditor(vm: BrowserViewModel, s: AppState, e: FileEntry) {
             ColorTag.entries.forEach { t ->
                 val on = t in tags
                 Box(
-                    Modifier.size(24.dp).clip(CircleShape).background(Color(t.argb).copy(alpha = if (on) 1f else 0.25f))
+                    Modifier.size(24.dp)
+                        .semantics {
+                            role = Role.Checkbox
+                            this.selected = on
+                            contentDescription = "Tag ${t.label}"
+                        }
+                        .clip(CircleShape)
+                        .background(Color(t.argb).copy(alpha = if (on) 1f else 0.25f))
                         .then(if (on) Modifier.border(2.dp, cs.onSurface.copy(alpha = 0.5f), CircleShape) else Modifier)
-                        .clickable { vm.toggleTag(t, listOf(e.path)) },
+                        .clickable(onClickLabel = if (on) "Remove ${t.label} tag" else "Add ${t.label} tag") { vm.toggleTag(t, listOf(e.path)) },
                     contentAlignment = Alignment.Center,
                 ) { if (on) Icon(Icons.Filled.Check, t.label, Modifier.size(14.dp), tint = Color.White) }
             }

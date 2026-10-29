@@ -36,6 +36,13 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.withTimeout
 
 /**
@@ -69,6 +76,11 @@ fun PointerInputChange.isPrecise(): Boolean = type == PointerType.Mouse || Point
  */
 fun Modifier.mouseGestures(
     key: Any?,
+    role: Role? = null,
+    selected: Boolean? = null,
+    contentDescription: String? = null,
+    onClickLabel: String? = null,
+    onLongClickLabel: String? = null,
     onClick: (ctrl: Boolean, shift: Boolean, touch: Boolean) -> Unit = { _, _, _ -> },
     onDoubleClick: () -> Unit = {},
     onSecondary: (rootOffset: Offset) -> Unit = {},
@@ -83,6 +95,20 @@ fun Modifier.mouseGestures(
     val longPress by rememberUpdatedState(onLongPress)
     val vc = LocalViewConfiguration.current
     this
+        .semantics {
+            role?.let { this.role = it }
+            selected?.let { this.selected = it }
+            contentDescription?.let { this.contentDescription = it }
+            this.onClick(label = onClickLabel) {
+                click(false, false, true)
+                true
+            }
+            this.onLongClick(label = onLongClickLabel) {
+                val rootPos = holder[0]?.localToRoot(Offset.Zero) ?: Offset.Zero
+                longPress(rootPos)
+                true
+            }
+        }
         .onGloballyPositioned { holder[0] = it }
         .pointerInput(key) {
             var lastUpTime = 0L

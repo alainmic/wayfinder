@@ -104,6 +104,9 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -273,7 +276,14 @@ fun MarkBadges(s: AppState, path: String, modifier: Modifier = Modifier, dot: Dp
     if (!starred && tags.isEmpty()) return
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
         if (starred) Icon(Icons.Filled.Star, "Starred", Modifier.size(dot + 6.dp), tint = StarColor)
-        tags.forEach { t -> Box(Modifier.size(dot).clip(CircleShape).background(Color(t.argb))) }
+        tags.forEach { t ->
+            Box(
+                Modifier.size(dot)
+                    .semantics { contentDescription = "Tagged ${t.label}" }
+                    .clip(CircleShape)
+                    .background(Color(t.argb)),
+            )
+        }
     }
 }
 
@@ -485,14 +495,14 @@ private fun DetailsHeader(vm: BrowserViewModel, s: AppState, tab: TabState, widt
             @Composable
             fun cell(label: String, key: SortKey, mod: Modifier, end: Boolean = false) {
                 Row(
-                    mod.fillMaxHeightCompat().clickable { vm.setSort(key) },
+                    mod.fillMaxHeightCompat().clickable(role = Role.Button, onClickLabel = "Sort by $label") { vm.setSort(key) },
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = if (end) Arrangement.End else Arrangement.Start,
                 ) {
                     Text(label, style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
                     if (tab.sortKey == key) Icon(
                         if (tab.sortAsc) Icons.Outlined.ArrowUpward else Icons.Outlined.ArrowDownward,
-                        if (tab.sortAsc) "Ascending" else "Descending", Modifier.padding(start = 4.dp).size(14.dp), tint = cs.onSurfaceVariant,
+                        if (tab.sortAsc) "Sorted ascending" else "Sorted descending", Modifier.padding(start = 4.dp).size(14.dp), tint = cs.onSurfaceVariant,
                     )
                 }
             }
@@ -527,6 +537,9 @@ private fun Modifier.entryInteractions(vm: BrowserViewModel, tab: TabState, e: F
         )
         .mouseGestures(
             e.path,
+            role = Role.Button,
+            selected = selected,
+            onClickLabel = "Open ${e.name}",
             onClick = { ctrl, shift, touch ->
                 if (touch) {
                     if (vm.state.value.active.selection.isNotEmpty()) vm.click(e.path, ctrl = true, shift = false) else vm.open(e)

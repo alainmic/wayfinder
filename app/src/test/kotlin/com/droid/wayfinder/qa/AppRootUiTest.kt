@@ -216,4 +216,19 @@ class AppRootUiTest {
         assertTrue(rule.onAllNodesWithText("2 items", substring = true).fetchSemanticsNodes().isNotEmpty())
         assertNotNull(h.s.active.entries.firstOrNull())
     }
+
+    @Test fun accessibilitySemanticsExposeClickAndSelectionState() {
+        launch { file("doc.txt"); navigate(root.path) }
+        row("doc.txt").performMouseInput { click() }
+        idle()
+        val clickableNodes = rule.onAllNodes(
+            androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsActions.OnClick),
+            useUnmergedTree = true,
+        ).fetchSemanticsNodes()
+        assertTrue("Expected semantics nodes with OnClick action for accessibility", clickableNodes.isNotEmpty())
+        val selectedNodes = clickableNodes.filter {
+            it.config.getOrElseNullable(androidx.compose.ui.semantics.SemanticsProperties.Selected) { null } == true
+        }
+        assertTrue("Expected selected file row and active tab/sidebar item to expose Selected=true", selectedNodes.isNotEmpty())
+    }
 }

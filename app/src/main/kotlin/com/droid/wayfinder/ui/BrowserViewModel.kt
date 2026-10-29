@@ -106,16 +106,26 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
         const val EXTRA_PICKER = "com.droid.wayfinder.extra.PICKER"
         const val EXTRA_PICKER_MULTIPLE = "com.droid.wayfinder.extra.PICKER_MULTIPLE"
         const val EXTRA_PICKER_MIME = "com.droid.wayfinder.extra.PICKER_MIME"
+        const val EXTRA_PICKER_MODE = "com.droid.wayfinder.extra.PICKER_MODE"
+        const val EXTRA_PICKER_TITLE = "com.droid.wayfinder.extra.PICKER_TITLE"
         private const val RECENT_DAYS = 30
     }
 
     private val settings = Settings(app)
     private val secondaryWindow: Boolean = handle.get<Any>(EXTRA_NEW_WINDOW) as? Boolean == true
     private val startPath: String? = (handle.get<Any>(EXTRA_PATH) as? String)?.takeIf { it.isNotBlank() && !it.contains('\u0000') }
-    private val picker: PickerRequest? = if (handle.get<Any>(EXTRA_PICKER) as? Boolean == true) PickerRequest(
-        allowMultiple = handle.get<Any>(EXTRA_PICKER_MULTIPLE) as? Boolean == true,
-        mimeTypes = (handle.get<Any>(EXTRA_PICKER_MIME) as? Array<*>)?.filterIsInstance<String>().orEmpty(),
-    ) else null
+    private val picker: PickerRequest? = if (handle.get<Any>(EXTRA_PICKER) as? Boolean == true) {
+        val rawMode = handle.get<Any>(EXTRA_PICKER_MODE) as? String
+        val mode = runCatching { com.droid.wayfinder.data.PickerMode.valueOf(rawMode.orEmpty()) }
+            .getOrDefault(com.droid.wayfinder.data.PickerMode.OpenFile)
+        val suggested = (handle.get<Any>(EXTRA_PICKER_TITLE) as? String)?.takeIf { it.isNotBlank() }.orEmpty()
+        PickerRequest(
+            allowMultiple = handle.get<Any>(EXTRA_PICKER_MULTIPLE) as? Boolean == true,
+            mimeTypes = (handle.get<Any>(EXTRA_PICKER_MIME) as? Array<*>)?.filterIsInstance<String>().orEmpty(),
+            mode = mode,
+            suggestedName = if (mode == com.droid.wayfinder.data.PickerMode.CreateDocument && suggested.isEmpty()) "Untitled" else suggested,
+        )
+    } else null
     private val servers = ServerStore(app)
     private val smb = SmbFileSystem(servers)
     private val dav = WebDavFileSystem(servers)
@@ -188,6 +198,7 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
             marks = SharedUi.marks.value, zoom = settings.zoom.coerceIn(0.7f, 1.6f), theme = SharedUi.theme.value,
             tagsColumn = settings.tagsColumn, permsColumn = settings.permsColumn, secondaryWindow = secondaryWindow,
             picker = picker,
+            createFileName = picker?.suggestedName.orEmpty(),
             driveAccounts = initialDrive,
             pairedPhone = initialPhone,
             phoneConnected = initialPhone != null,
@@ -730,7 +741,7 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
 
     fun open(entry: FileEntry, newTab: Boolean = false) {
         // Picker mode: double-clicking a file selects it and returns it to the calling app.
-        if (picker != null && !entry.isDir) { pick(listOf(entry)); return }
+        if (picker != null && picker.mode == com.droid.wayfinder.data.PickerMode.OpenFile && !entry.isDir) { pick(listOf(entry)); return }
         when {
             entry.isDir && newTab -> newTab(entry.path, activate = false)
             entry.isDir -> navigate(entry.path)
@@ -1751,7 +1762,7 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
         saf.disconnect(id)
     }
 
-    // ---------------------------------------------------------------- picker mode (GET_CONTENT / OPEN_DOCUMENT)
+    // ---------------------------------------------------------------- picker mode (GET_CONTENT / OPEN_DOCUMENT / OPEN_DOCUMENT_TREE / CREATE_DOCUMENT)
 
     private fun mimeOf(name: String): String? =
         android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase())
@@ -1765,6 +1776,84 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
             .let { if (picker?.allowMultiple == true) it else it.take(1) }
 
     fun pickSelection() = pick(tab.selectedEntries(hidden).filter { !it.isDir && !it.isServer && !it.isShare })
+
+    fun setCreateFileName(name: String) {
+        _state.update { it.copy(createFileName = name) }
+    }
+
+    /** True when the active folder (or single selected subfolder) can be granted via ACTION_OPEN_DOCUMENT_TREE. */
+    fun canPickFolder(folderPath: String = targetTreeFolder()): Boolean {
+        if (FsPath.isVirtual(folderPath) || FsPath.isZip(folderPath)) return false
+        if (FsPath.isLocalFile(folderPath) && (FileInfo.isSymlink(folderPath) || isPrivatePath(folderPath))) return false
+        return FsPath.isLocalFile(folderPath) || folderPath.startsWith("doc://") || folderPath.startsWith("saf://")
+    }
+
+    fun targetTreeFolder(): String =
+        tab.selectedEntries(hidden).singleOrNull()?.takeIf { it.isDir && !it.isServer && !it.isShare }?.path ?: tab.path
+
+    /** Returns the selected (or active) folder tree URI to the calling app for ACTION_OPEN_DOCUMENT_TREE. */
+    fun pickCurrentFolder() {
+        val p = picker ?: return
+        if (p.mode != com.droid.wayfinder.data.PickerMode.OpenTree) return
+        val folder = targetTreeFolder()
+        if (!canPickFolder(folder)) {
+            toast("Select a local or document folder"); return
+        }
+        val uri = com.droid.wayfinder.data.SystemDocumentsBridge.toDocumentsContractUri(
+            path = folder,
+            tree = true,
+            safMounts = safMounts,
+            primaryStorageRoot = primary,
+        )
+        emit(UiEvent.PickTreeResult(folder, uri))
+    }
+
+    /** Creates the target document in the active folder and returns its URI for ACTION_CREATE_DOCUMENT. */
+    fun confirmCreateDocument() {
+        val p = picker ?: return
+        if (p.mode != com.droid.wayfinder.data.PickerMode.CreateDocument) return
+        val dir = tab.path
+        if (FsPath.isReadOnly(dir) || trash.isInTrash(dir)) {
+            toast("Cannot save files in this location"); return
+        }
+        if (FsPath.isLocalFile(dir) && (FileInfo.isSymlink(dir) || isPrivatePath(dir))) {
+            toast("Cannot save files in this location"); return
+        }
+        val name = _state.value.createFileName.trim()
+        val err = FsPath.nameError(name)
+        if (err != null) {
+            toast(err); return
+        }
+        val requestedMime = p.mimeTypes.firstOrNull { it.isNotBlank() && it != "*/*" }
+            ?: mimeOf(name)
+            ?: "application/octet-stream"
+        val candidatePath = FsPath.child(dir, name)
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val createdPath = if (dir.startsWith("doc://")) {
+                        docFs.createFileWithMime(candidatePath, requestedMime)
+                    } else {
+                        repo.fs(dir).createFile(candidatePath)
+                        candidatePath
+                    }
+                    val uri = com.droid.wayfinder.data.SystemDocumentsBridge.toDocumentsContractUri(
+                        path = createdPath,
+                        tree = false,
+                        safMounts = safMounts,
+                        primaryStorageRoot = primary,
+                    )
+                    createdPath to uri
+                }
+            }
+            result.onSuccess { (createdPath, uri) ->
+                load(tab.id, select = createdPath)
+                emit(UiEvent.CreateDocumentResult(createdPath, uri, requestedMime))
+            }.onFailure { e ->
+                toast(e.message ?: "Couldn't create file")
+            }
+        }
+    }
 
     /** Returns [entries] to the calling app; network / archive files are downloaded to the cache first. */
     fun pick(entries: List<FileEntry>) {

@@ -118,8 +118,29 @@ class MainActivity : ComponentActivity() {
                         ?.filter { !it.isNullOrBlank() }?.take(64)?.map { it.take(255) }
                         ?.takeIf { it.isNotEmpty() } ?: listOfNotNull(i.type)
                     i.putExtra(BrowserViewModel.EXTRA_PICKER, true)
+                    i.putExtra(BrowserViewModel.EXTRA_PICKER_MODE, com.droid.wayfinder.data.PickerMode.OpenFile.name)
                     i.putExtra(BrowserViewModel.EXTRA_PICKER_MULTIPLE, runCatching { i.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE, false) }.getOrDefault(false))
                     i.putExtra(BrowserViewModel.EXTRA_PICKER_MIME, mimes.toTypedArray())
+                }
+                Intent.ACTION_OPEN_DOCUMENT_TREE -> {
+                    i.putExtra(BrowserViewModel.EXTRA_PICKER, true)
+                    i.putExtra(BrowserViewModel.EXTRA_PICKER_MODE, com.droid.wayfinder.data.PickerMode.OpenTree.name)
+                }
+                Intent.ACTION_CREATE_DOCUMENT -> {
+                    val title = runCatching { i.getStringExtra(Intent.EXTRA_TITLE) }.getOrNull()
+                        ?.takeIf { it.isNotBlank() }?.take(255) ?: "Untitled"
+                    val mimes = listOfNotNull(i.type?.takeIf { it.isNotBlank() })
+                    i.putExtra(BrowserViewModel.EXTRA_PICKER, true)
+                    i.putExtra(BrowserViewModel.EXTRA_PICKER_MODE, com.droid.wayfinder.data.PickerMode.CreateDocument.name)
+                    i.putExtra(BrowserViewModel.EXTRA_PICKER_TITLE, title)
+                    i.putExtra(BrowserViewModel.EXTRA_PICKER_MIME, mimes.toTypedArray())
+                }
+                "android.provider.action.BROWSE", "android.provider.action.MANAGE_DOCUMENT" -> {
+                    val targetPath = com.droid.wayfinder.data.SystemDocumentsBridge.toWayfinderPath(i.data)
+                    if (targetPath != null) {
+                        i.putExtra(BrowserViewModel.EXTRA_NEW_WINDOW, true)
+                        i.putExtra(BrowserViewModel.EXTRA_PATH, targetPath)
+                    }
                 }
                 android.app.DownloadManager.ACTION_VIEW_DOWNLOADS -> {
                     // Opened like an extra window so the main window's saved tabs stay untouched.

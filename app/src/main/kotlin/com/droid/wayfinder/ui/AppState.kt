@@ -79,6 +79,14 @@ sealed interface UiEvent {
     data object PickGoogleAccount : UiEvent
     /** Picker mode: return these local files (already downloaded if remote) to the calling app. */
     data class PickResult(val paths: List<String>) : UiEvent
+    /** Folder picker mode (ACTION_OPEN_DOCUMENT_TREE): return the selected directory tree URI to the calling app. */
+    data class PickTreeResult(val path: String, val uri: android.net.Uri? = null) : UiEvent
+    /** Save-as mode (ACTION_CREATE_DOCUMENT): return the newly created document URI to the calling app. */
+    data class CreateDocumentResult(
+        val path: String,
+        val uri: android.net.Uri? = null,
+        val mimeType: String = "application/octet-stream",
+    ) : UiEvent
     data object PickCancel : UiEvent
 }
 
@@ -133,6 +141,8 @@ data class AppState(
     val savedServers: List<SavedServer> = emptyList(),
     /** Non-null when launched by another app to pick a file (GET_CONTENT / OPEN_DOCUMENT). */
     val picker: PickerRequest? = null,
+    /** Editable target filename in ACTION_CREATE_DOCUMENT ("Save As") picker mode. */
+    val createFileName: String = "",
     /** True when a phone is actively connected or paired (USB / Bluetooth / MTP). */
     val phoneConnected: Boolean = false,
     /** Discovered Google Drive accounts on the device. */

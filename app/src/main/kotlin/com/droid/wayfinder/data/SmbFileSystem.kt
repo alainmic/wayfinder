@@ -69,10 +69,11 @@ class SmbFileSystem(private val creds: CredentialProvider) : RemoteFileSystem {
         } catch (e: Exception) {
             throw IOException("Can't reach $host. Check the address and your network.", e)
         }
-        val ctx = if (cred == null || cred.user.isBlank()) {
+        val pwd = if (cred == null || cred.user.isBlank()) null else cred.password.toCharArray()
+        val ctx = if (pwd == null || cred == null) {
             AuthenticationContext.guest()
         } else {
-            AuthenticationContext(cred.user, cred.password.toCharArray(), cred.domain)
+            AuthenticationContext(cred.user, pwd, cred.domain)
         }
         try {
             val s = conn.authenticate(ctx)
@@ -84,6 +85,8 @@ class SmbFileSystem(private val creds: CredentialProvider) : RemoteFileSystem {
                 throw SmbAuthException(host, e)
             }
             throw IOException("Sign-in to $host failed: ${e.message}", e)
+        } finally {
+            pwd?.fill('\u0000')
         }
     }
 

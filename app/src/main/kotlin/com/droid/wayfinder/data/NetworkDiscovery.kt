@@ -25,7 +25,7 @@ import java.net.Socket
 
 data class DiscoveredHost(val label: String, val address: String)
 
-/** Finds SMB servers on the LAN via mDNS (`_smb._tcp`) and a quick port-445 sweep of the local /24. */
+/** Finds SMB servers on the LAN via passive mDNS (`_smb._tcp`), with optional on-demand port-445 scan. */
 class NetworkDiscovery(context: Context, private val scope: CoroutineScope) {
     private val app = context.applicationContext
     private val nsd = app.getSystemService(Context.NSD_SERVICE) as NsdManager
@@ -67,7 +67,6 @@ class NetworkDiscovery(context: Context, private val scope: CoroutineScope) {
             }
             runCatching { nsd.discoverServices("_smb._tcp", NsdManager.PROTOCOL_DNS_SD, l); listener = l }
         }
-        scan()
     }
 
     fun stop() {

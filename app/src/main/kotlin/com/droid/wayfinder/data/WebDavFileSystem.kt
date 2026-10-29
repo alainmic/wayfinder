@@ -31,8 +31,8 @@ class WebDavFileSystem(private val creds: CredentialProvider) : RemoteFileSystem
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
-        .followRedirects(true)
-        // Never follow an https:// location to plain http:// (or vice versa).
+        // Redirects are validated manually in exec() so cross-origin redirects are never followed.
+        .followRedirects(false)
         .followSslRedirects(false)
         .build()
 
@@ -65,16 +65,38 @@ class WebDavFileSystem(private val creds: CredentialProvider) : RemoteFileSystem
     }
 
     private fun exec(path: String, req: Request): Response {
-        val r = try {
-            client.newCall(req).execute()
-        } catch (e: IOException) {
-            throw IOException("Can't reach ${url(path).host}: ${e.message ?: "connection failed"}", e)
+        var current = req
+        for (hop in 0..5) {
+            val r = try {
+                client.newCall(current).execute()
+            } catch (e: IOException) {
+                throw IOException("Can't reach ${url(path).host}: ${e.message ?: "connection failed"}", e)
+            }
+            if (r.code == 401) {
+                r.close()
+                throw RemoteAuthException(key(path))
+            }
+            if (r.code in listOf(301, 302, 303, 307, 308)) {
+                val loc = r.header("Location")
+                r.close()
+                if (loc.isNullOrBlank() || hop == 5) {
+                    throw IOException("Too many or invalid redirects from ${req.url.host}")
+                }
+                val target = current.url.resolve(loc)
+                    ?: throw IOException("Invalid redirect target from ${req.url.host}")
+                if (
+                    target.scheme != req.url.scheme ||
+                    !target.host.equals(req.url.host, ignoreCase = true) ||
+                    target.port != req.url.port
+                ) {
+                    throw IOException("Refused cross-origin redirect to ${target.scheme}://${target.host}:${target.port}")
+                }
+                current = current.newBuilder().url(target).build()
+                continue
+            }
+            return r
         }
-        if (r.code == 401) {
-            r.close()
-            throw RemoteAuthException(key(path))
-        }
-        return r
+        throw IOException("Too many redirects from ${req.url.host}")
     }
 
     private fun fail(r: Response, what: String): Nothing {
@@ -188,9 +210,30 @@ class WebDavFileSystem(private val creds: CredentialProvider) : RemoteFileSystem
     /** Uploads are spooled to a temporary file and sent with a known length on close (no chunked PUTs). */
     override fun openOutput(path: String): OutputStream {
         val tmp = File.createTempFile("wf-dav", ".part")
-        return object : FilterOutputStream(FileOutputStream(tmp).buffered(256 * 1024)) {
+        val fos = try {
+            FileOutputStream(tmp).buffered(256 * 1024)
+        } catch (e: Throwable) {
+            tmp.delete()
+            throw e
+        }
+        return object : FilterOutputStream(fos) {
             private var closed = false
-            override fun write(b: ByteArray, off: Int, len: Int) = out.write(b, off, len)
+            override fun write(b: Int) {
+                try {
+                    out.write(b)
+                } catch (e: IOException) {
+                    tmp.delete()
+                    throw e
+                }
+            }
+            override fun write(b: ByteArray, off: Int, len: Int) {
+                try {
+                    out.write(b, off, len)
+                } catch (e: IOException) {
+                    tmp.delete()
+                    throw e
+                }
+            }
             override fun close() {
                 if (closed) return
                 closed = true

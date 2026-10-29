@@ -258,4 +258,32 @@ class WebDavIntegrationTest {
         // Conflict detection works on the remote side too.
         assertEquals(listOf("a.txt"), ops.conflicts(listOf(File(local, "a.txt").path), root))
     }
+
+    @Test fun crossOriginRedirectIsRefusedAndDoesNotLeakAuthHeader() {
+        val otherServer = MockWebServer()
+        val otherRequests = mutableListOf<RecordedRequest>()
+        otherServer.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                synchronized(otherRequests) { otherRequests += request }
+                return MockResponse().setResponseCode(200).setBody("pwned")
+            }
+        }
+        otherServer.start()
+        try {
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    return MockResponse()
+                        .setResponseCode(302)
+                        .setHeader("Location", "http://127.0.0.1:${otherServer.port}/steal")
+                }
+            }
+            val e = assertThrows(IOException::class.java) {
+                fs.openInput("$root/a.txt").use { it.readBytes() }
+            }
+            assertTrue(e.message, e.message!!.contains("cross-origin redirect"))
+            assertTrue("Cross-origin redirect target must never be contacted", otherRequests.isEmpty())
+        } finally {
+            otherServer.shutdown()
+        }
+    }
 }

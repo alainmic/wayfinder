@@ -117,6 +117,17 @@ fun ConnectDialog(vm: BrowserViewModel, initial: ConnectConfig?, saved: List<Sav
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Protocol.entries.forEach { p -> FilterChip(p == protocol, { setProtocol(p) }, label = { Text(p.label) }) }
                 }
+                if ((protocol == Protocol.FTP || protocol == Protocol.DAV) && !guest) {
+                    val secureAlt = if (protocol == Protocol.FTP) Protocol.FTPS.label else Protocol.DAVS.label
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(Icons.Outlined.ErrorOutline, null, Modifier.size(16.dp), tint = cs.error)
+                        Text(
+                            "Warning: Credentials and files are sent unencrypted over ${protocol.label}. Prefer $secureAlt.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = cs.error,
+                        )
+                    }
+                }
                 OutlinedTextField(
                     address, ::onAddress, Modifier.fillMaxWidth().focusRequester(fr), singleLine = true,
                     label = { Text("Server address or UNC path") },

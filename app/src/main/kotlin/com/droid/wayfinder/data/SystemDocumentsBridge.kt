@@ -70,6 +70,7 @@ object SystemDocumentsBridge {
                 val mimeCol = c.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
                 val sizeCol = c.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_SIZE)
                 val modCol = c.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+                val summaryCol = c.getColumnIndex(DocumentsContract.Document.COLUMN_SUMMARY)
 
                 val list = mutableListOf<FileEntry>()
                 while (c.moveToNext()) {
@@ -79,6 +80,12 @@ object SystemDocumentsBridge {
                     val isDir = mime == DocumentsContract.Document.MIME_TYPE_DIR
                     val size = if (isDir) 0L else c.getLong(sizeCol).coerceAtLeast(0L)
                     val mod = c.getLong(modCol)
+                    val docSummary = if (summaryCol >= 0 && !c.isNull(summaryCol)) c.getString(summaryCol)?.takeIf { it.isNotBlank() } else null
+                    val defaultSubtitle = when {
+                        authority.contains("mtp") || authority.contains("phone") -> "Pixel 9"
+                        GooglebookEcosystem.isLinuxAuthority(authority) -> "Linux files"
+                        else -> "Documents"
+                    }
 
                     list.add(
                         FileEntry(
@@ -87,7 +94,7 @@ object SystemDocumentsBridge {
                             isDir = isDir,
                             size = size,
                             modified = if (mod > 0) mod else System.currentTimeMillis(),
-                            subtitle = if (authority.contains("mtp") || authority.contains("phone")) "Pixel 9" else "Documents",
+                            subtitle = docSummary ?: defaultSubtitle,
                         )
                     )
                 }
@@ -126,7 +133,9 @@ class DocFileSystem(private val context: Context) : RemoteFileSystem {
                     val isDir = mime == DocumentsContract.Document.MIME_TYPE_DIR
                     val size = if (isDir) 0L else c.getLong(c.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_SIZE)).coerceAtLeast(0L)
                     val mod = c.getLong(c.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_LAST_MODIFIED))
-                    FileEntry(path, name, isDir, size, if (mod > 0) mod else System.currentTimeMillis())
+                    val summaryCol = c.getColumnIndex(DocumentsContract.Document.COLUMN_SUMMARY)
+                    val summary = if (summaryCol >= 0 && !c.isNull(summaryCol)) c.getString(summaryCol)?.takeIf { it.isNotBlank() } else null
+                    FileEntry(path, name, isDir, size, if (mod > 0) mod else System.currentTimeMillis(), subtitle = summary)
                 } else null
             }
         }.getOrNull()

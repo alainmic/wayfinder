@@ -87,13 +87,15 @@ object PhoneDetector {
             }
         }
 
-        // 4. Check USB devices
-        runCatching {
-            val usbManager = context.getSystemService(Context.USB_SERVICE) as? UsbManager
-            usbManager?.deviceList?.values?.forEach { dev ->
-                val prod = dev.productName.orEmpty()
-                if (isPhoneMount(prod)) {
-                    return PairedPhone(name = prod, subtitle = "Internal Storage", path = FsPath.PHONE_ROOT, isConnected = true)
+        // 4. Check USB devices (unless disallowed by enterprise policy)
+        if (!GooglebookEcosystem.isUsbFileTransferDisallowed(context)) {
+            runCatching {
+                val usbManager = context.getSystemService(Context.USB_SERVICE) as? UsbManager
+                usbManager?.deviceList?.values?.forEach { dev ->
+                    val prod = dev.productName.orEmpty()
+                    if (isPhoneMount(prod)) {
+                        return PairedPhone(name = prod, subtitle = "Internal Storage", path = FsPath.PHONE_ROOT, isConnected = true)
+                    }
                 }
             }
         }
@@ -130,6 +132,7 @@ object PhoneDetector {
     }
 
     private fun isUsbPhoneConnected(context: Context): Boolean {
+        if (GooglebookEcosystem.isUsbFileTransferDisallowed(context)) return false
         return runCatching {
             val usbManager = context.getSystemService(Context.USB_SERVICE) as? UsbManager ?: return false
             usbManager.deviceList.values.any { dev ->

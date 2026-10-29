@@ -193,6 +193,21 @@ fun Sidebar(vm: BrowserViewModel, s: AppState, modifier: Modifier) {
             }
         }
 
+        // Enterprise Work Profile switching via CrossProfileApps
+        if (s.workProfiles.isNotEmpty()) {
+            items(s.workProfiles, key = { "work${it.id}" }) { wp ->
+                SidebarItem(
+                    label = wp.label,
+                    icon = Icons.Outlined.FolderShared,
+                    depth = 0,
+                    selected = false,
+                    dropPath = null,
+                    subtitle = "Managed profile",
+                    onClick = { vm.openWorkProfile(wp) },
+                )
+            }
+        }
+
         // Google Drive integration matching system Files app
         if (s.driveAccounts.isNotEmpty()) {
             item { Divider() }

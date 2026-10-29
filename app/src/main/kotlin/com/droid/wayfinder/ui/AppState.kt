@@ -137,6 +137,10 @@ data class AppState(
     val driveAccounts: List<com.droid.wayfinder.data.DriveAccount> = emptyList(),
     /** Paired smartphone (e.g. Pixel 9) details. */
     val pairedPhone: com.droid.wayfinder.data.PairedPhone? = null,
+    /** Discovered Linux development environment root path (`doc://...` or local `LinuxFiles`), if available. */
+    val linuxRootPath: String? = null,
+    /** Discovered managed Work / Personal profiles via CrossProfileApps. */
+    val workProfiles: List<com.droid.wayfinder.data.WorkProfileTarget> = emptyList(),
 ) {
     /** The tab selected in the tab strip (left pane in dual-pane mode). */
     val mainTab: TabState get() = tabs.firstOrNull { it.id == activeId } ?: tabs.first()

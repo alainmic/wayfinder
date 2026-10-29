@@ -54,6 +54,8 @@ class SecretBox(private val alias: String = "wayfinder_smb") {
             KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(256)
+                .setRandomizedEncryptionRequired(true)
                 .build(),
         )
         return gen.generateKey()
@@ -68,9 +70,12 @@ class SecretBox(private val alias: String = "wayfinder_smb") {
 
     fun decrypt(encoded: String): String? = try {
         val raw = Base64.decode(encoded, Base64.NO_WRAP)
-        val c = Cipher.getInstance("AES/GCM/NoPadding")
-        c.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, raw.copyOfRange(0, 12)))
-        String(c.doFinal(raw, 12, raw.size - 12))
+        if (raw.size <= 12) null
+        else {
+            val c = Cipher.getInstance("AES/GCM/NoPadding")
+            c.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, raw.copyOfRange(0, 12)))
+            String(c.doFinal(raw, 12, raw.size - 12))
+        }
     } catch (_: Exception) {
         null
     }

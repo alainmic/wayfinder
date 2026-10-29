@@ -40,6 +40,7 @@ object SafLabels {
         authority == "com.android.providers.downloads.documents" -> "Downloads"
         authority == "com.android.providers.media.documents" -> "Media"
         authority == "com.android.mtp.documents" -> "Phone"
+        GooglebookEcosystem.isLinuxAuthority(authority) -> "Linux files"
         authority.startsWith("com.microsoft.skydrive") -> "OneDrive"
         authority.contains("dropbox", true) -> "Dropbox"
         authority.contains("nextcloud", true) -> "Nextcloud"
@@ -68,10 +69,10 @@ class SafFileSystem(context: Context, private val mounts: () -> List<SafMount>) 
 
     private val cols = arrayOf(
         Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_MIME_TYPE,
-        Document.COLUMN_SIZE, Document.COLUMN_LAST_MODIFIED,
+        Document.COLUMN_SIZE, Document.COLUMN_LAST_MODIFIED, Document.COLUMN_SUMMARY,
     )
 
-    private class Row(val id: String, val name: String, val mime: String, val size: Long, val modified: Long) {
+    private class Row(val id: String, val name: String, val mime: String, val size: Long, val modified: Long, val summary: String? = null) {
         val isDir get() = mime == Document.MIME_TYPE_DIR
     }
 
@@ -102,9 +103,11 @@ class SafFileSystem(context: Context, private val mounts: () -> List<SafMount>) 
             while (c.moveToNext()) {
                 // Display names are chosen by the (third-party) provider: never let them act as path separators.
                 val name = safeDisplayName(c.getString(1) ?: continue) ?: continue
+                val summary = if (c.columnCount > 5 && !c.isNull(5)) c.getString(5)?.takeIf { it.isNotBlank() } else null
                 out += Row(
                     c.getString(0) ?: continue, name, c.getString(2).orEmpty(),
                     if (c.isNull(3)) 0L else c.getLong(3), if (c.isNull(4)) 0L else c.getLong(4),
+                    summary,
                 )
             }
         }
@@ -114,7 +117,11 @@ class SafFileSystem(context: Context, private val mounts: () -> List<SafMount>) 
     private fun meta(m: SafMount, docId: String): Row? =
         cr.query(docUri(m, docId), cols, null, null, null)?.use { c ->
             if (!c.moveToFirst()) null
-            else Row(docId, c.getString(1).orEmpty(), c.getString(2).orEmpty(), if (c.isNull(3)) 0L else c.getLong(3), if (c.isNull(4)) 0L else c.getLong(4))
+            else Row(
+                docId, c.getString(1).orEmpty(), c.getString(2).orEmpty(),
+                if (c.isNull(3)) 0L else c.getLong(3), if (c.isNull(4)) 0L else c.getLong(4),
+                if (c.columnCount > 5 && !c.isNull(5)) c.getString(5)?.takeIf { it.isNotBlank() } else null,
+            )
         }
 
     /** Document ID for [path], or null if it doesn't exist. */
@@ -139,6 +146,7 @@ class SafFileSystem(context: Context, private val mounts: () -> List<SafMount>) 
     private fun toEntry(parent: String, r: Row) = FileEntry(
         path = FsPath.child(parent, r.name), name = r.name, isDir = r.isDir,
         size = if (r.isDir) 0 else r.size, modified = r.modified,
+        subtitle = r.summary,
     )
 
     override fun list(path: String): List<FileEntry> = guard("Couldn't open ${FsPath.name(path)}") {
@@ -156,7 +164,7 @@ class SafFileSystem(context: Context, private val mounts: () -> List<SafMount>) 
         if (RemoteUri.relOf(p).isEmpty()) return@guard FileEntry(p, m.label, true, isServer = true)
         val id = resolve(m, p) ?: return@guard null
         val r = meta(m, id) ?: run { invalidate(p); return@guard null }
-        FileEntry(p, FsPath.name(p), r.isDir, if (r.isDir) 0 else r.size, r.modified)
+        FileEntry(p, FsPath.name(p), r.isDir, if (r.isDir) 0 else r.size, r.modified, subtitle = r.summary)
     }
 
     private fun create(path: String, mime: String): String {

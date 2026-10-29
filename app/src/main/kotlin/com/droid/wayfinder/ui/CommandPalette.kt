@@ -187,7 +187,7 @@ fun paletteCommands(vm: BrowserViewModel, s: AppState): List<PaletteItem> {
         s.linuxRootPath?.let { linuxPath ->
             add(c("Linux files", "Open the Googlebook Linux development environment", null, Icons.Outlined.Dns) { vm.navigate(linuxPath) })
             if (tab.selection.isNotEmpty() && tab.path != linuxPath) {
-                add(c("Copy to Linux files", "Copy selected items to the Linux development environment", null, Icons.Outlined.DriveFileMove) { vm.shareWithLinux() })
+                add(c("Copy to Linux files", "Copy selected items to the Linux development environment", null, Icons.AutoMirrored.Outlined.DriveFileMove) { vm.shareWithLinux() })
             }
         }
         s.workProfiles.forEach { wp ->

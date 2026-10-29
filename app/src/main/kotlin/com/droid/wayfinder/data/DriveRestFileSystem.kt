@@ -207,7 +207,7 @@ class DriveRestFileSystem(
     override fun openOutput(path: String): OutputStream {
         val (email, _) = parsePath(path)
         val token = getToken(email)
-        val cacheDir = runCatching { context.cacheDir }.getOrNull()
+        val cacheDir = runCatching { context?.cacheDir }.getOrNull()
         val tmp = File.createTempFile("wf-gdrive", ".part", cacheDir)
         val fos = try {
             FileOutputStream(tmp).buffered(256 * 1024)

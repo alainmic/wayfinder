@@ -302,11 +302,7 @@ fun Sidebar(vm: BrowserViewModel, s: AppState, modifier: Modifier) {
 @Composable
 private fun HeaderAction(icon: ImageVector, desc: String, onClick: () -> Unit) {
     Box(
-<<<<<<< HEAD
-        Modifier.size(24.dp).clip(RoundedCornerShape(12.dp)).mouseGestures(desc, role = Role.Button, onClickLabel = desc, onClick = { _, _, _ -> onClick() }),
-=======
-        Modifier.sizeIn(minWidth = 28.dp, minHeight = 28.dp).clip(RoundedCornerShape(14.dp)).mouseGestures(desc, onClick = { _, _, _ -> onClick() }),
->>>>>>> pr-12
+        Modifier.sizeIn(minWidth = 28.dp, minHeight = 28.dp).clip(RoundedCornerShape(14.dp)).mouseGestures(desc, role = Role.Button, onClickLabel = desc, onClick = { _, _, _ -> onClick() }),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, desc, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
 }

@@ -214,7 +214,7 @@ fun fileMenu(vm: BrowserViewModel, s: AppState, entry: FileEntry): List<MenuEntr
         if (canExtract && !readOnlyHere) add(item("Extract archive here", Icons.Outlined.Unarchive) { vm.extractSelection() })
         if (FsPath.isLocalFile(entry.path)) add(item("Share", Icons.Outlined.Share, enabled = sel.any { !it.isDir }) { vm.share() })
         s.linuxRootPath?.takeIf { local && it != tab.path }?.let {
-            add(item("Copy to Linux files", Icons.Outlined.DriveFileMove) { vm.shareWithLinux() })
+            add(item("Copy to Linux files", Icons.AutoMirrored.Outlined.DriveFileMove) { vm.shareWithLinux() })
         }
         add(MenuEntry.Divider)
         add(starItem(vm, s, markable))

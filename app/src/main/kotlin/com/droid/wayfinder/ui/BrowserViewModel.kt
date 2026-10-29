@@ -178,7 +178,7 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
         }
         val tabs = startPaths.map { newTabState(it) }
         val initialDrive = GoogleDriveManager.discoverAccounts(app, safMounts)
-        val initialPhone = PhoneDetector.detectPairedPhone(app)
+        val initialPhone = PhoneDetector.detectPairedPhone(app, safMounts = safMounts)
         _state.value = AppState(
             tabs = tabs,
             activeId = tabs[(if (secondaryWindow || picker != null || startPath != null) 0 else settings.activeTab).coerceIn(0, tabs.lastIndex)].id,
@@ -238,9 +238,11 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
             }
         }
         rootsObserver = observer
-        runCatching {
-            val rootsUri = android.provider.DocumentsContract.buildRootsUri(GoogleDriveManager.DOCS_AUTHORITY)
-            app.contentResolver.registerContentObserver(rootsUri, true, observer)
+        for (auth in listOf(GoogleDriveManager.DOCS_AUTHORITY, PhoneDetector.QUICK_ACCESS_AUTHORITY, PhoneDetector.MTP_AUTHORITY)) {
+            runCatching {
+                val rootsUri = android.provider.DocumentsContract.buildRootsUri(auth)
+                app.contentResolver.registerContentObserver(rootsUri, true, observer)
+            }
         }
     }
 
@@ -265,7 +267,7 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
     }
 
     fun refreshPhoneStatus() {
-        val phone = PhoneDetector.detectPairedPhone(app, _state.value.mounts)
+        val phone = PhoneDetector.detectPairedPhone(app, _state.value.mounts, safMounts)
         _state.update { it.copy(pairedPhone = phone, phoneConnected = phone != null) }
     }
 
@@ -339,6 +341,8 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
             val label = when {
                 !name.isNullOrBlank() && name.contains("@") && uri.authority == GoogleDriveManager.DOCS_AUTHORITY ->
                     "Drive ($name)"
+                PhoneDetector.isPhoneAuthority(uri.authority) ->
+                    name?.takeIf { it.isNotBlank() } ?: provider
                 name.isNullOrBlank() || name == provider -> provider
                 else -> "$provider · $name"
             }
@@ -358,7 +362,7 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
         val saved = servers.saved()
         val currentMounts = computeMounts(saved)
         val driveAccs = GoogleDriveManager.discoverAccounts(app, safMounts)
-        val phone = PhoneDetector.detectPairedPhone(app, currentMounts)
+        val phone = PhoneDetector.detectPairedPhone(app, currentMounts, safMounts)
         _state.update { it.copy(
             savedServers = saved,
             mounts = currentMounts,
@@ -1040,7 +1044,8 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
         val rootPaths = _state.value.roots.map { it.path } +
             _state.value.network.map { it.path } +
             _state.value.mounts.map { it.path } +
-            _state.value.driveAccounts.mapNotNull { it.mountPath }
+            _state.value.driveAccounts.mapNotNull { it.mountPath } +
+            listOfNotNull(_state.value.pairedPhone?.path).filter { it != FsPath.PHONE_ROOT }
         if (rootPaths.none { FsPath.isWithin(it, path) }) return
         var cur = FsPath.parent(path)
         while (cur != null && cur != FsPath.SMB_ROOT) {
@@ -1652,6 +1657,22 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
         } else {
             requestMountSaf(acc.email)
         }
+    }
+
+    fun openPairedPhone(phone: com.droid.wayfinder.data.PairedPhone) {
+        if (phone.isMounted && phone.path != FsPath.PHONE_ROOT) {
+            navigate(phone.path)
+        } else {
+            navigate(FsPath.PHONE_ROOT)
+        }
+    }
+
+    fun requestMountPhoneStorage(phone: com.droid.wayfinder.data.PairedPhone? = _state.value.pairedPhone) {
+        val targetAuth = phone?.authority ?: PhoneDetector.QUICK_ACCESS_AUTHORITY
+        val initialUri = runCatching {
+            android.provider.DocumentsContract.buildRootsUri(targetAuth)
+        }.getOrNull()
+        emit(UiEvent.PickDocumentTree(initialUri = initialUri))
     }
 
     fun requestMountSaf(accountEmail: String? = null) {

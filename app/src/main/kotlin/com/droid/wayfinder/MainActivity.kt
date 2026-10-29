@@ -191,7 +191,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             val isTree = runCatching { android.provider.DocumentsContract.isTreeUri(cleanUri) }.getOrDefault(false)
-            if (persisted && isTree && !com.droid.wayfinder.data.SystemDocumentsBridge.isPhoneAuthority(cleanUri.authority)) {
+            if (persisted && isTree && !com.droid.wayfinder.data.PhoneDetector.isPhoneAuthority(cleanUri.authority)) {
                 mountedTreeUri = cleanUri
             }
         }

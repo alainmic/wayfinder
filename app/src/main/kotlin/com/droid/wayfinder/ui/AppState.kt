@@ -150,7 +150,9 @@ data class AppState(
     val rootLabels: Map<String, String>
         get() = roots.associate { it.path to it.label } +
             mounts.associate { it.path to it.label } +
-            driveAccounts.mapNotNull { acc -> acc.mountPath?.let { it to "Drive (${acc.email})" } }.toMap()
+            driveAccounts.mapNotNull { acc -> acc.mountPath?.let { it to "Drive (${acc.email})" } }.toMap() +
+            pairedPhone?.takeIf { it.isMounted && it.path != com.droid.wayfinder.data.FsPath.PHONE_ROOT }
+                ?.let { mapOf(it.path to it.name) }.orEmpty()
 
     fun titleOf(path: String): String = when {
         com.droid.wayfinder.data.FsPath.isVirtual(path) -> com.droid.wayfinder.data.FsPath.name(path)

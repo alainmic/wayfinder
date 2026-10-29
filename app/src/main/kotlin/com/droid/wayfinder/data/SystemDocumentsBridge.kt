@@ -31,18 +31,13 @@ data class DiscoveredRoot(
 
 object SystemDocumentsBridge {
     private const val TAG = "SystemDocumentsBridge"
-    const val QUICK_ACCESS_AUTHORITY = "com.google.ambient.streaming.multidevicesync.quickaccess"
-    const val MTP_AUTHORITY = "com.android.mtp.documents"
-    private val PHONE_AUTHORITIES = setOf(QUICK_ACCESS_AUTHORITY, MTP_AUTHORITY)
+    const val QUICK_ACCESS_AUTHORITY = PhoneDetector.QUICK_ACCESS_AUTHORITY
+    const val MTP_AUTHORITY = PhoneDetector.MTP_AUTHORITY
 
     private val displayNames = ConcurrentHashMap<String, String>()
     private val parents = ConcurrentHashMap<String, String>()
 
-    fun isPhoneAuthority(authority: String?): Boolean {
-        if (authority.isNullOrBlank()) return false
-        val clean = authority.substringAfter('@').lowercase()
-        return clean in PHONE_AUTHORITIES || clean.contains("quickaccess") || clean.contains("mtp.documents")
-    }
+    fun isPhoneAuthority(authority: String?): Boolean = PhoneDetector.isPhoneAuthority(authority)
 
     fun registerNode(path: String, displayName: String, parentPath: String? = null) {
         val norm = FsPath.normalize(path)
@@ -81,7 +76,7 @@ object SystemDocumentsBridge {
      * `<deviceId>//<remotePath>` double-slash convention).
      */
     fun normalizeDocId(authority: String, docId: String): String {
-        if (authority == QUICK_ACCESS_AUTHORITY && docId.contains('/') && !docId.contains("//")) {
+        if (authority == PhoneDetector.QUICK_ACCESS_AUTHORITY && docId.contains('/') && !docId.contains("//")) {
             val deviceId = docId.substringBefore('/')
             val remotePath = docId.substringAfter('/')
             return "$deviceId//$remotePath"
@@ -187,7 +182,7 @@ object SystemDocumentsBridge {
             val resolvedDocId = normalizeDocId(authority, documentId)
             val parentPath = "doc://$authority/$resolvedDocId"
             val childrenUri = DocumentsContract.buildChildDocumentsUri(authority, resolvedDocId)
-            val isQuickAccess = authority == QUICK_ACCESS_AUTHORITY
+            val isQuickAccess = authority == PhoneDetector.QUICK_ACCESS_AUTHORITY
             queryWithLoadingWait(
                 cr = context.contentResolver,
                 uri = childrenUri,

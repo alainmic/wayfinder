@@ -76,16 +76,18 @@ private data class TreeRowData(
     val expanded: Boolean, val loading: Boolean, val expandable: Boolean,
     val subtitle: String? = null,
     val driveAccount: com.droid.wayfinder.data.DriveAccount? = null,
+    val pairedPhone: com.droid.wayfinder.data.PairedPhone? = null,
 )
 
 private fun flatten(
     path: String, label: String, icon: ImageVector, tint: Color?, depth: Int, s: AppState, out: MutableList<TreeRowData>,
     subtitle: String? = null,
     driveAccount: com.droid.wayfinder.data.DriveAccount? = null,
+    pairedPhone: com.droid.wayfinder.data.PairedPhone? = null,
 ) {
     val expanded = path in s.tree.expanded
     val kids = s.tree.children[path]
-    out += TreeRowData(path, label, icon, tint, depth, expanded, path in s.tree.loading, kids == null || kids.isNotEmpty(), subtitle, driveAccount)
+    out += TreeRowData(path, label, icon, tint, depth, expanded, path in s.tree.loading, kids == null || kids.isNotEmpty(), subtitle, driveAccount, pairedPhone)
     if (expanded && kids != null) {
         kids.filter { s.showHidden || !it.isHidden }.forEach {
             flatten(it.path, it.name, if (it.isShare) Icons.Outlined.FolderShared else Icons.Outlined.Folder, null, depth + 1, s, out)
@@ -103,23 +105,38 @@ fun Sidebar(vm: BrowserViewModel, s: AppState, modifier: Modifier) {
     val locations = remember(s.roots, s.tree, s.showHidden) {
         buildList { s.roots.forEach { flatten(it.path, it.label, rootIcon(it.removable), null, 0, s, this, it.subtitle) } }
     }
-    val driveMountPaths = remember(s.driveAccounts) { s.driveAccounts.mapNotNull { it.mountPath }.toSet() }
     val driveRows = remember(s.driveAccounts, s.tree, s.showHidden) {
         buildList {
             s.driveAccounts.forEach { acc ->
                 val rootPath = acc.mountPath ?: "gdrive://${acc.email}/root"
                 if (acc.isMounted && acc.mountPath != null) {
-                    flatten(acc.mountPath, "Drive", Icons.Outlined.Cloud, null, 0, s, this, acc.email, acc)
+                    flatten(acc.mountPath, "Drive", Icons.Outlined.Cloud, null, 0, s, this, acc.email, driveAccount = acc)
                 } else {
-                    add(TreeRowData(rootPath, "Drive", Icons.Outlined.Cloud, null, 0, false, false, false, acc.email, acc))
+                    add(TreeRowData(rootPath, "Drive", Icons.Outlined.Cloud, null, 0, false, false, false, acc.email, driveAccount = acc))
                 }
             }
         }
     }
-    // Saved servers and cloud / SAF mounts first (with eject buttons), filtering out those mapped to Drive accounts
-    val mountRows = remember(s.mounts, s.tree, s.showHidden, driveMountPaths) {
+    val phoneRows = remember(s.pairedPhone, s.tree, s.showHidden) {
         buildList {
-            s.mounts.filter { it.path !in driveMountPaths }.forEach { m ->
+            val phone = s.pairedPhone
+            if (phone != null) {
+                if (phone.isMounted && phone.path != FsPath.PHONE_ROOT) {
+                    flatten(phone.path, phone.name, Icons.Outlined.Smartphone, null, 0, s, this, phone.subtitle, pairedPhone = phone)
+                } else {
+                    add(TreeRowData(FsPath.PHONE_ROOT, phone.name, Icons.Outlined.Smartphone, null, 0, false, false, false, phone.subtitle, pairedPhone = phone))
+                }
+            }
+        }
+    }
+    val specialMountPaths = remember(s.driveAccounts, s.pairedPhone) {
+        s.driveAccounts.mapNotNull { it.mountPath }.toSet() +
+            setOfNotNull(s.pairedPhone?.path?.takeIf { it != FsPath.PHONE_ROOT })
+    }
+    // Saved servers and cloud / SAF mounts first (with eject buttons), filtering out those mapped to Drive accounts or Phone
+    val mountRows = remember(s.mounts, s.tree, s.showHidden, specialMountPaths) {
+        buildList {
+            s.mounts.filter { it.path !in specialMountPaths }.forEach { m ->
                 flatten(m.path, m.label, if (m.saf) Icons.Outlined.Cloud else Icons.Outlined.Dns, null, 0, s, this)
             }
         }
@@ -189,23 +206,10 @@ fun Sidebar(vm: BrowserViewModel, s: AppState, modifier: Modifier) {
         locStart[0] = n
         items(locations, key = { "loc${it.path}" }) { r -> TreeItem(vm, s, r, treePath, menu) }
 
-        // Paired phone (e.g. Pixel 9 · Internal Storage) matching the system Files app layout
-        val phone = s.pairedPhone
-        if (phone != null) {
-            item {
-                val selected = activePath == phone.path || FsPath.isWithin(phone.path, activePath)
-                SidebarItem(
-                    label = phone.name,
-                    icon = Icons.Outlined.Smartphone,
-                    depth = 0,
-                    selected = selected,
-                    dropPath = phone.path,
-                    subtitle = phone.subtitle,
-                    onClick = { vm.navigate(phone.path) },
-                    onMiddle = { vm.newTab(phone.path, activate = false) },
-                    onSecondary = { menu.show(it, phoneMenu(vm, phone)) },
-                )
-            }
+        // Paired phone (e.g. Pixel 9 · Internal storage) matching the system Files app layout
+        items(phoneRows, key = { "phone${it.depth}${it.path}" }) { r ->
+            val mount = if (r.depth == 0) s.mounts.firstOrNull { it.path == r.path } else null
+            TreeItem(vm, s, r, activePath, menu, mount = mount)
         }
 
         // Google Drive integration matching system Files app
@@ -289,10 +293,13 @@ private fun HeaderAction(icon: ImageVector, desc: String, onClick: () -> Unit) {
 @Composable
 private fun TreeItem(vm: BrowserViewModel, s: AppState, r: TreeRowData, activePath: String, menu: MenuController, mount: Mount? = null) {
     val driveAcc = r.driveAccount
+    val phone = r.pairedPhone
     val selected = when {
         driveAcc != null && !r.expanded ->
             (driveAcc.mountPath != null && (driveAcc.mountPath == activePath || FsPath.isWithin(driveAcc.mountPath, activePath))) ||
                 activePath.startsWith("gdrive://${driveAcc.email}")
+        phone != null && !r.expanded ->
+            activePath == phone.path || FsPath.isWithin(phone.path, activePath) || activePath == FsPath.PHONE_ROOT
         else -> r.path == activePath
     }
     SidebarItem(
@@ -305,22 +312,35 @@ private fun TreeItem(vm: BrowserViewModel, s: AppState, r: TreeRowData, activePa
             driveAcc != null && driveAcc.isMounted && mount != null -> ({
                 HeaderAction(Icons.Outlined.Eject, "Unmount ${driveAcc.email}") { vm.eject(mount) }
             })
+            phone != null && phone.isMounted && mount != null -> ({
+                HeaderAction(Icons.Outlined.Eject, "Unmount ${phone.name}") { vm.eject(mount) }
+            })
             mount != null -> ({ HeaderAction(Icons.Outlined.Eject, if (mount.saf) "Unmount ${mount.label}" else "Disconnect ${mount.label}") { vm.eject(mount) } })
             r.path in s.pins -> ({ Icon(Icons.Filled.PushPin, "Pinned", Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) })
             else -> null
         },
         onClick = {
-            if (driveAcc != null) vm.openDriveAccount(driveAcc) else vm.navigate(r.path)
+            when {
+                driveAcc != null -> vm.openDriveAccount(driveAcc)
+                phone != null -> vm.openPairedPhone(phone)
+                else -> vm.navigate(r.path)
+            }
         },
         onMiddle = {
-            if (driveAcc != null) driveAcc.mountPath?.let { vm.newTab(it, activate = false) } else vm.newTab(r.path, activate = false)
+            when {
+                driveAcc != null -> driveAcc.mountPath?.let { vm.newTab(it, activate = false) }
+                phone != null -> vm.newTab(phone.path, activate = false)
+                else -> vm.newTab(r.path, activate = false)
+            }
         },
         onSecondary = {
-            if (driveAcc != null) {
-                menu.show(it, driveAccountMenu(vm, driveAcc, mount))
-            } else {
-                val base = sidebarMenu(vm, s, r.path, r.path in s.pins)
-                menu.show(it, if (mount == null) base else base + mountMenu(vm, mount))
+            when {
+                driveAcc != null -> menu.show(it, driveAccountMenu(vm, driveAcc, mount))
+                phone != null -> menu.show(it, phoneMenu(vm, phone, mount))
+                else -> {
+                    val base = sidebarMenu(vm, s, r.path, r.path in s.pins)
+                    menu.show(it, if (mount == null) base else base + mountMenu(vm, mount))
+                }
             }
         },
     )

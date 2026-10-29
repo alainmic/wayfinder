@@ -19,6 +19,8 @@
 
     <queries>
         <package android:name="com.google.android.apps.docs" />
+        <package android:name="com.google.ambient.streaming" />
+        <package android:name="com.android.mtp" />
         <intent>
             <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
         </intent>

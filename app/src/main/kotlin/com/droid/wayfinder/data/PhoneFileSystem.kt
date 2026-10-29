@@ -13,8 +13,13 @@ import java.io.OutputStream
 
 /**
  * FileSystem implementation for paired phone browsing (`phone://`).
- * Bridges to real mounted phone/MTP volumes when present, or provides the standard Android phone
- * filesystem hierarchy (Download, Pictures, DCIM, Documents, etc.) mapped to device/Quick Share directories.
+ *
+ * In production (`rootOverride == null`), this bridges to real connected phone roots provided by
+ * `QuickAccessDocumentsProvider` (`com.google.ambient.streaming.multidevicesync.quickaccess`),
+ * `MtpDocumentsProvider` (`com.android.mtp.documents`), or a secondary mounted phone `StorageVolume`.
+ * It NEVER maps `phone://` to the local host device's `/storage/emulated/0`.
+ *
+ * In unit tests (`rootOverride != null`), it operates inside the isolated test sandbox directory.
  */
 class PhoneFileSystem(
     private val context: Context? = null,
@@ -44,15 +49,20 @@ class PhoneFileSystem(
         return segs
     }
 
+    /**
+     * Resolves a secondary mounted phone storage volume (`!isPrimary`), never returning the local
+     * device's primary/emulated storage.
+     */
     fun resolveRealDirectory(): File? {
         if (rootOverride != null) return null
         val ctx = context ?: return null
-        // 1. Check StorageManager storageVolumes for phone volume
+        // 1. Check StorageManager secondary storageVolumes for a phone volume
         runCatching {
             val sm = ctx.getSystemService(StorageManager::class.java)
             for (v in sm.storageVolumes) {
+                if (v.isPrimary) continue
                 val desc = v.getDescription(ctx).orEmpty()
-                if (!v.isPrimary || desc.contains("Pixel", true) || desc.contains("Phone", true)) {
+                if (PhoneDetector.isPhoneMount(desc) || PhoneDetector.isPhoneMount(v.mediaStoreVolumeName.orEmpty())) {
                     val d = v.directory
                     if (d != null && d.exists() && d.canRead() && (d.listFiles()?.isNotEmpty() == true)) {
                         return d
@@ -60,58 +70,42 @@ class PhoneFileSystem(
                 }
             }
         }
-        // 2. Check /storage mounts
+        // 2. Check /storage mounts (excluding primary/emulated storage so host storage is never mistaken for a phone)
         runCatching {
             File("/storage").listFiles()?.forEach { f ->
-                if (f.isDirectory && f.name != "emulated" && f.name != "self") {
+                if (f.isDirectory && f.name != "emulated" && f.name != "self" && PhoneDetector.isPhoneMount(f.name)) {
                     if (f.listFiles()?.isNotEmpty() == true) return f
                 }
-            }
-        }
-        // 3. Check /storage/emulated/0
-        runCatching {
-            val f0 = File("/storage/emulated/0")
-            if (f0.isDirectory && f0.canRead() && f0.listFiles()?.any { it.name.equals("DCIM", true) } == true) {
-                return f0
             }
         }
         return null
     }
 
-    private fun hostRootDir(): File = rootOverride
-        ?: runCatching { Environment.getExternalStorageDirectory() }.getOrNull()?.takeIf { it.exists() }
-        ?: File("/storage/emulated/0")
-
-    private fun mapFolderToHost(segs: List<String>): File {
-        if (segs.isEmpty()) return hostRootDir()
-        val root = segs.first()
-        val relSegs = segs.drop(1)
-        val hostBase = hostRootDir()
-        val base = when (root.lowercase()) {
-            "download", "downloads" -> {
-                val qs = File(hostBase, "Download/Quick Share")
-                if (qs.exists()) qs else if (rootOverride == null) {
-                    runCatching {
-                        File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Quick Share").takeIf { it.exists() }
-                    }.getOrNull() ?: File(hostBase, "Download")
-                } else File(hostBase, "Download")
+    private fun discoverProviderRoot(): DiscoveredRoot? {
+        if (rootOverride != null) return null
+        val ctx = context ?: return null
+        return runCatching {
+            val roots = SystemDocumentsBridge.discoverRoots(ctx)
+            roots.firstOrNull { r ->
+                r.authority == PhoneDetector.QUICK_ACCESS_AUTHORITY || r.authority == PhoneDetector.MTP_AUTHORITY
+            } ?: roots.firstOrNull { r ->
+                PhoneDetector.isPhoneAuthority(r.authority)
             }
-            "pictures" -> File(hostBase, "Pictures")
-            "dcim" -> File(hostBase, "DCIM")
-            "documents" -> File(hostBase, "Documents")
-            "movies" -> File(hostBase, "Movies")
-            "music" -> File(hostBase, "Music")
-            "audiobooks" -> File(hostBase, "Audiobooks")
-            "recordings" -> File(hostBase, "Recordings")
-            "alarms" -> File(hostBase, "Alarms")
-            "notifications" -> File(hostBase, "Notifications")
-            "ringtones" -> File(hostBase, "Ringtones")
-            "podcasts" -> File(hostBase, "Podcasts")
-            "android" -> File(hostBase, "Android")
-            else -> File(hostBase, root)
-        }
+        }.getOrNull()
+    }
+
+    private fun toDocPath(root: DiscoveredRoot, segs: List<String>): String {
+        val baseDocId = root.documentId.trimEnd('/')
+        val fullDocId = if (segs.isEmpty()) baseDocId else "$baseDocId/${segs.joinToString("/")}"
+        return "doc://${root.authority}/$fullDocId"
+    }
+
+    private fun resolveSandboxDir(segs: List<String>): File {
+        val base = rootOverride ?: throw IOException(
+            "Phone storage is not connected. Connect your phone via Cross-Device Services (Phone Hub) or USB File Transfer (MTP).",
+        )
         var cur = base
-        for (s in relSegs) {
+        for (s in segs) {
             cur = File(cur, s)
         }
         return cur
@@ -123,14 +117,19 @@ class PhoneFileSystem(
             for (s in segs) cur = File(cur, s)
             return cur
         }
-        return mapFolderToHost(segs)
+        return resolveSandboxDir(segs)
     }
 
     override fun list(path: String): List<FileEntry> {
         val segs = validateSegments(path)
         val sub = segs.joinToString("/")
-        val realDir = resolveRealDirectory()
 
+        discoverProviderRoot()?.let { root ->
+            val ctx = context ?: return emptyList()
+            return DocFileSystem(ctx).list(toDocPath(root, segs))
+        }
+
+        val realDir = resolveRealDirectory()
         if (realDir != null) {
             val target = resolveTarget(segs, realDir)
             val files = target.listFiles() ?: emptyArray()
@@ -149,11 +148,18 @@ class PhoneFileSystem(
             }.sortedWith(compareByDescending<FileEntry> { it.isDir }.thenBy { it.name.lowercase() })
         }
 
-        // Virtual phone filesystem matching system Files app
+        // When no real phone provider or volume is mounted in production, return an empty root listing
+        // (so the UI shows the Phone connection onboarding screen) and never expose local laptop storage.
+        if (rootOverride == null) {
+            if (segs.isEmpty()) return emptyList()
+            throw IOException("Phone storage is not connected. Connect your phone via Cross-Device Services (Phone Hub) or USB File Transfer (MTP).")
+        }
+
+        // Sandbox mode (used by unit tests with explicit rootOverride)
         if (segs.isEmpty()) {
-            val baseTime = 1744848000000L // Apr 17, 2025 phone setup timestamp
+            val baseTime = 1744848000000L
             return standardFolders.map { name ->
-                val host = mapFolderToHost(listOf(name))
+                val host = resolveSandboxDir(listOf(name))
                 val mod = if (host.exists() && host.lastModified() > baseTime) host.lastModified() else baseTime
                 FileEntry(
                     path = "${FsPath.PHONE_ROOT}$name",
@@ -166,7 +172,7 @@ class PhoneFileSystem(
             }.sortedWith(compareByDescending<FileEntry> { it.isDir }.thenBy { it.name.lowercase() })
         }
 
-        val hostDir = mapFolderToHost(segs)
+        val hostDir = resolveSandboxDir(segs)
         val files = hostDir.listFiles()?.filter { FsPath.isSafeName(it.name) && !it.name.startsWith(".") } ?: emptyList()
         return files.map { f ->
             val link = FileInfo.isSymlink(f.path)
@@ -184,8 +190,12 @@ class PhoneFileSystem(
 
     override fun stat(path: String): FileEntry? {
         val segs = try { validateSegments(path) } catch (_: IOException) { return null }
+        discoverProviderRoot()?.let { root ->
+            val ctx = context ?: return null
+            return DocFileSystem(ctx).stat(toDocPath(root, segs))
+        }
         if (segs.isEmpty()) {
-            return FileEntry(FsPath.PHONE_ROOT, "Pixel 9", isDir = true, size = 0L, modified = System.currentTimeMillis(), subtitle = "Internal Storage")
+            return FileEntry(FsPath.PHONE_ROOT, "Connected Phone", isDir = true, size = 0L, modified = System.currentTimeMillis(), subtitle = "Internal Storage")
         }
         val normPath = "${FsPath.PHONE_ROOT}${segs.joinToString("/")}"
         val realDir = resolveRealDirectory()
@@ -194,12 +204,13 @@ class PhoneFileSystem(
             if (!f.exists() && !FileInfo.isSymlink(f.path)) return null
             return FileEntry(normPath, f.name, f.isDirectory, if (f.isDirectory) 0L else f.length(), f.lastModified(), isLink = FileInfo.isSymlink(f.path), subtitle = null)
         }
+        if (rootOverride == null) return null
         val top = segs.first()
         if (segs.size == 1 && standardFolders.any { it.equals(top, ignoreCase = true) }) {
             val canonicalTop = standardFolders.first { it.equals(top, ignoreCase = true) }
             return FileEntry(normPath, canonicalTop, isDir = true, size = 0L, modified = 1744848000000L, subtitle = null)
         }
-        val hostFile = mapFolderToHost(segs)
+        val hostFile = resolveSandboxDir(segs)
         if (!hostFile.exists() && !FileInfo.isSymlink(hostFile.path)) return null
         return FileEntry(normPath, hostFile.name, hostFile.isDirectory, if (hostFile.isDirectory) 0L else hostFile.length(), hostFile.lastModified(), isLink = FileInfo.isSymlink(hostFile.path), subtitle = null)
     }
@@ -207,6 +218,10 @@ class PhoneFileSystem(
     override fun openInput(path: String): InputStream {
         val segs = validateSegments(path)
         if (segs.isEmpty()) throw IOException("Cannot open root as file")
+        discoverProviderRoot()?.let { root ->
+            val ctx = context ?: throw IOException("Context unavailable")
+            return DocFileSystem(ctx).openInput(toDocPath(root, segs))
+        }
         val file = resolveTarget(segs, resolveRealDirectory())
         return file.inputStream().buffered(64 * 1024)
     }
@@ -214,6 +229,10 @@ class PhoneFileSystem(
     override fun openOutput(path: String): OutputStream {
         val segs = validateSegments(path)
         if (segs.isEmpty()) throw IOException("Cannot write to phone root")
+        discoverProviderRoot()?.let { root ->
+            val ctx = context ?: throw IOException("Context unavailable")
+            return DocFileSystem(ctx).openOutput(toDocPath(root, segs))
+        }
         val file = resolveTarget(segs, resolveRealDirectory())
         file.parentFile?.mkdirs()
         return file.outputStream().buffered(64 * 1024)
@@ -222,6 +241,11 @@ class PhoneFileSystem(
     override fun mkdir(path: String) {
         val segs = validateSegments(path)
         if (segs.isEmpty()) throw IOException("Cannot create phone root")
+        discoverProviderRoot()?.let { root ->
+            val ctx = context ?: throw IOException("Context unavailable")
+            DocFileSystem(ctx).mkdir(toDocPath(root, segs))
+            return
+        }
         val file = resolveTarget(segs, resolveRealDirectory())
         if (!file.mkdirs() && !file.isDirectory) throw IOException("Couldn't create folder ${file.name}")
     }
@@ -229,6 +253,11 @@ class PhoneFileSystem(
     override fun createFile(path: String) {
         val segs = validateSegments(path)
         if (segs.isEmpty()) throw IOException("Cannot create file at phone root")
+        discoverProviderRoot()?.let { root ->
+            val ctx = context ?: throw IOException("Context unavailable")
+            DocFileSystem(ctx).createFile(toDocPath(root, segs))
+            return
+        }
         val file = resolveTarget(segs, resolveRealDirectory())
         file.parentFile?.mkdirs()
         if (!file.createNewFile()) throw IOException("Couldn't create file ${file.name}")
@@ -236,6 +265,12 @@ class PhoneFileSystem(
 
     override fun delete(path: String) {
         val segs = validateSegments(path)
+        discoverProviderRoot()?.let { root ->
+            if (segs.isEmpty()) throw IOException("Cannot delete phone root")
+            val ctx = context ?: throw IOException("Context unavailable")
+            DocFileSystem(ctx).delete(toDocPath(root, segs))
+            return
+        }
         val realDir = resolveRealDirectory()
         if (segs.isEmpty() || (segs.size == 1 && realDir == null && standardFolders.any { it.equals(segs[0], ignoreCase = true) })) {
             throw IOException("Cannot delete system phone folder")
@@ -247,6 +282,11 @@ class PhoneFileSystem(
     override fun rename(path: String, newName: String): String {
         FsPath.nameError(newName)?.let { throw IOException(it) }
         val segs = validateSegments(path)
+        discoverProviderRoot()?.let { root ->
+            if (segs.isEmpty()) throw IOException("Cannot rename phone root")
+            val ctx = context ?: throw IOException("Context unavailable")
+            return DocFileSystem(ctx).rename(toDocPath(root, segs), newName)
+        }
         val realDir = resolveRealDirectory()
         if (segs.isEmpty() || (segs.size == 1 && realDir == null && standardFolders.any { it.equals(segs[0], ignoreCase = true) })) {
             throw IOException("Cannot rename system phone folder")

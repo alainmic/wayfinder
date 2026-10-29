@@ -17,12 +17,22 @@ data class DriveAccount(
     val isMounted: Boolean = mountPath != null,
 )
 
+enum class PhoneTransport {
+    QUICK_ACCESS,
+    USB_MTP,
+    STORAGE_VOLUME,
+    BLUETOOTH_UNMOUNTED,
+}
+
 /** Paired smartphone (e.g. Pixel 9) discovered on the device. */
 data class PairedPhone(
     val name: String = "Pixel 9",
     val subtitle: String = "Internal Storage",
     val path: String = FsPath.PHONE_ROOT,
     val isConnected: Boolean = true,
+    val authority: String? = null,
+    val isMounted: Boolean = path != FsPath.PHONE_ROOT,
+    val transport: PhoneTransport = PhoneTransport.QUICK_ACCESS,
 )
 
 /** Finder-style color labels; [argb] is the dot color. */

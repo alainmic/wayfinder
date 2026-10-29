@@ -179,6 +179,7 @@ fun fileMenu(vm: BrowserViewModel, s: AppState, entry: FileEntry): List<MenuEntr
     )
     val dirs = sel.filter { it.isDir }
     val isArchive = single && vm.isBrowsableArchive(entry)
+    val canExtract = sel.any { vm.isBrowsableArchive(it) }
     val inZip = FsPath.isZip(entry.path)
     val readOnlyHere = FsPath.isReadOnly(tab.path)
     val markable = sel.filter { !it.isServer && !it.isShare }.map { it.path }
@@ -211,7 +212,7 @@ fun fileMenu(vm: BrowserViewModel, s: AppState, entry: FileEntry): List<MenuEntr
         add(item("Rename", Icons.Outlined.Edit, "F2", enabled = single && local && !inZip) { vm.requestRename() })
         if (sel.size > 1 && local && !readOnlyHere) add(item("Batch rename ${sel.size} items…", Icons.Outlined.DriveFileRenameOutline, "Ctrl+Shift+R") { vm.requestBatchRename() })
         add(item("Compress to ZIP", Icons.Outlined.Archive, enabled = !entry.isServer && !entry.isShare && !readOnlyHere) { vm.requestCompress() })
-        if (isArchive && !readOnlyHere) add(item("Extract archive here", Icons.Outlined.Unarchive) { vm.extractSelection() })
+        if (canExtract && !readOnlyHere) add(item("Extract archive here", Icons.Outlined.Unarchive) { vm.extractSelection() })
         if (FsPath.isLocalFile(entry.path)) add(item("Share", Icons.Outlined.Share, enabled = sel.any { !it.isDir }) { vm.share() })
         add(MenuEntry.Divider)
         add(starItem(vm, s, markable))

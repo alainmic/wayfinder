@@ -193,9 +193,11 @@ fun paletteCommands(vm: BrowserViewModel, s: AppState): List<PaletteItem> {
         add(c(if (s.permsColumn) "Hide Permissions column" else "Show Permissions column", "Details view column", null, Icons.Outlined.Lock) { vm.togglePermsColumn() })
         val one = tab.selectedEntries(s.showHidden).singleOrNull()
         if (one != null && !one.isDir) add(c("Open with…", "Choose an app for ${one.name}", null, Icons.Outlined.AppRegistration) { vm.openWith() })
-        if (one != null && vm.isBrowsableZip(one)) {
+        if (one != null && vm.isBrowsableArchive(one)) {
             add(c("Browse archive", "Open ${one.name} as a folder", null, Icons.Outlined.FolderZip) { vm.browseArchive(one.path) })
             add(c("Extract archive here", "Unpack ${one.name} into this folder", null, Icons.Outlined.Unarchive) { vm.extractSelection() })
+        } else if (tab.selectedEntries(s.showHidden).any { vm.isBrowsableArchive(it) }) {
+            add(c("Extract archive here", "Unpack selected archives into this folder", null, Icons.Outlined.Unarchive) { vm.extractSelection() })
         }
         if (one != null && (tab.searchResults != null || FsPath.isCollection(tab.path))) {
             add(c("Show in enclosing folder", "Go to the folder that contains ${one.name}", null, Icons.Outlined.FindInPage) { vm.showInEnclosingFolder(one.path) })

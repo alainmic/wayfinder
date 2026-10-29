@@ -198,6 +198,7 @@ object PhoneDetector {
      * Excludes USB hubs, Ethernet adapters (`USB_CLASS_COMM` / `USB_CLASS_CDC_DATA`), HID devices, and webcams.
      */
     fun findConnectedUsbPhoneName(context: Context): String? {
+        if (GooglebookEcosystem.isUsbFileTransferDisallowed(context)) return null
         return runCatching {
             val usbManager = context.getSystemService(Context.USB_SERVICE) as? UsbManager ?: return null
             for (dev in usbManager.deviceList.values) {

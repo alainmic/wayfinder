@@ -28,6 +28,8 @@ import com.droid.wayfinder.data.FileInfo
 import com.droid.wayfinder.data.FileOperations
 import com.droid.wayfinder.data.FileRepository
 import com.droid.wayfinder.data.GoogleDriveManager
+import com.droid.wayfinder.data.GooglebookEcosystem
+import com.droid.wayfinder.data.WorkProfileTarget
 import com.droid.wayfinder.data.FsPath
 import com.droid.wayfinder.data.LocalFileSystem
 import com.droid.wayfinder.data.NetworkDiscovery
@@ -189,6 +191,8 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
         val tabs = startPaths.map { newTabState(it) }
         val initialDrive = GoogleDriveManager.discoverAccounts(app, safMounts)
         val initialPhone = PhoneDetector.detectPairedPhone(app, safMounts = safMounts)
+        val initialLinux = GooglebookEcosystem.discoverLinuxRoot(app, primary)?.path
+        val initialWorkProfiles = GooglebookEcosystem.discoverWorkProfiles(app)
         _state.value = AppState(
             tabs = tabs,
             activeId = tabs[(if (secondaryWindow || picker != null || startPath != null) 0 else settings.activeTab).coerceIn(0, tabs.lastIndex)].id,
@@ -202,6 +206,8 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
             driveAccounts = initialDrive,
             pairedPhone = initialPhone,
             phoneConnected = initialPhone != null,
+            linuxRootPath = initialLinux,
+            workProfiles = initialWorkProfiles,
         )
         refreshMounts()
         tabs.forEach { load(it.id) }
@@ -286,24 +292,33 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
 
     private fun loadRoots(): List<RootVolume> {
         val sm = app.getSystemService(StorageManager::class.java)
+        val disallowPhysicalMedia = GooglebookEcosystem.isPhysicalMediaMountDisallowed(app)
         val primaryFree = runCatching {
             val stat = android.os.StatFs(primary)
             val gb = stat.availableBytes / (1024L * 1024 * 1024)
             "$gb GB free"
         }.getOrNull()
-        val vols = sm.storageVolumes.filter { it.state == Environment.MEDIA_MOUNTED && it.directory != null }
+        val vols = sm.storageVolumes
+            .filter { it.state == Environment.MEDIA_MOUNTED && it.directory != null && (!disallowPhysicalMedia || it.isPrimary) }
             .map { RootVolume(it.directory!!.path, if (it.isPrimary) "Internal storage" else it.getDescription(app), !it.isPrimary, if (it.isPrimary) primaryFree else null) }
             .toMutableList()
 
         // Also discover any additional mounted storage directories under /storage (SD cards, USB drives, MTP mounts)
-        runCatching {
-            File("/storage").listFiles()?.forEach { f ->
-                if (f.isDirectory && f.name != "emulated" && f.name != "self") {
-                    val p = f.absolutePath
-                    if (vols.none { it.path == p }) {
-                        vols += RootVolume(p, f.name, true)
+        if (!disallowPhysicalMedia) {
+            runCatching {
+                File("/storage").listFiles()?.forEach { f ->
+                    if (f.isDirectory && f.name != "emulated" && f.name != "self") {
+                        val p = f.absolutePath
+                        if (vols.none { it.path == p }) {
+                            vols += RootVolume(p, f.name, true)
+                        }
                     }
                 }
+            }
+        }
+        GooglebookEcosystem.discoverLinuxRoot(app, primary)?.let { linuxRoot ->
+            if (vols.none { it.path == linuxRoot.path }) {
+                vols += linuxRoot
             }
         }
         return vols.ifEmpty { listOf(RootVolume(primary, "Internal storage", false, primaryFree)) }
@@ -374,6 +389,8 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
         val currentMounts = computeMounts(saved)
         val driveAccs = GoogleDriveManager.discoverAccounts(app, safMounts)
         val phone = PhoneDetector.detectPairedPhone(app, currentMounts, safMounts)
+        val linuxPath = GooglebookEcosystem.discoverLinuxRoot(app, primary)?.path
+        val workProfiles = GooglebookEcosystem.discoverWorkProfiles(app)
         _state.update { it.copy(
             savedServers = saved,
             mounts = currentMounts,
@@ -381,6 +398,8 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
             driveAccounts = driveAccs,
             pairedPhone = phone,
             phoneConnected = phone != null,
+            linuxRootPath = linuxPath,
+            workProfiles = workProfiles,
         ) }
     }
 
@@ -987,7 +1006,7 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
                     for (e in list) {
                         // Linked folders are not followed (symlink loops would make the walk endless).
                         if (e.isDir && !e.isLink && (hidden || !e.isHidden) && seen.add(e.path)) queue.add(e.path)
-                        if (foldForSearch(e.name).contains(needle) && filter.matches(e, now)) found += e
+                        if (GooglebookEcosystem.matchesSearchQuery(e, needle) && filter.matches(e, now)) found += e
                     }
                     val now = System.currentTimeMillis()
                     if (now - lastPush > 150) {
@@ -1361,6 +1380,32 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
         if (files.isEmpty()) { toast("Select local files to share"); return }
         if (files.any { isUnsafeToExpose(it) }) { toast("This file can't be shared"); return }
         emit(UiEvent.Share(files))
+    }
+
+    /** Copies the selected items into the Googlebook Linux development environment (`Linux files`). */
+    fun shareWithLinux() {
+        val linuxDest = _state.value.linuxRootPath ?: GooglebookEcosystem.discoverLinuxRoot(app, primary)?.path
+        if (linuxDest == null) {
+            toast("Linux development environment is not enabled")
+            return
+        }
+        val sources = selectionPaths().filter { !FsPath.isVirtual(it) }
+        if (sources.isEmpty()) {
+            toast("Select items to copy to Linux files")
+            return
+        }
+        if (tab.path == linuxDest) {
+            toast("Already in Linux files")
+            return
+        }
+        transferWithPrompt(sources, linuxDest, move = false)
+    }
+
+    /** Switches to the selected managed Work / Personal profile via [CrossProfileApps]. */
+    fun openWorkProfile(target: WorkProfileTarget) {
+        if (!GooglebookEcosystem.switchToWorkProfile(app, target)) {
+            toast("Unable to switch to ${target.label}")
+        }
     }
 
     fun copyPathToClipboard() {

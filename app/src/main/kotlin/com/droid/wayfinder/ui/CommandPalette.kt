@@ -184,6 +184,15 @@ fun paletteCommands(vm: BrowserViewModel, s: AppState): List<PaletteItem> {
         if (s.phoneConnected) {
             add(c("Phone (Quick Access)", "Browse files from connected phone and Quick Share", null, Icons.Outlined.Smartphone) { vm.navigate(FsPath.PHONE_ROOT) })
         }
+        s.linuxRootPath?.let { linuxPath ->
+            add(c("Linux files", "Open the Googlebook Linux development environment", null, Icons.Outlined.Dns) { vm.navigate(linuxPath) })
+            if (tab.selection.isNotEmpty() && tab.path != linuxPath) {
+                add(c("Copy to Linux files", "Copy selected items to the Linux development environment", null, Icons.Outlined.DriveFileMove) { vm.shareWithLinux() })
+            }
+        }
+        s.workProfiles.forEach { wp ->
+            add(c(wp.label, "Switch to managed profile (${wp.label})", null, Icons.Outlined.Folder) { vm.openWorkProfile(wp) })
+        }
         add(c("Add to / remove from Starred", "Star the selection (or the current folder)", null, Icons.Outlined.StarOutline) { vm.toggleStar() })
         ColorTag.entries.forEach { t ->
             add(c("Tag: ${t.label}", "Toggle the ${t.label} color tag on the selection", null, Icons.AutoMirrored.Outlined.Label) { vm.toggleTag(t) })

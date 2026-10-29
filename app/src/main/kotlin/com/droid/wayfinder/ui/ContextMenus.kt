@@ -213,6 +213,9 @@ fun fileMenu(vm: BrowserViewModel, s: AppState, entry: FileEntry): List<MenuEntr
         add(item("Compress to ZIP", Icons.Outlined.Archive, enabled = !entry.isServer && !entry.isShare && !readOnlyHere) { vm.requestCompress() })
         if (canExtract && !readOnlyHere) add(item("Extract archive here", Icons.Outlined.Unarchive) { vm.extractSelection() })
         if (FsPath.isLocalFile(entry.path)) add(item("Share", Icons.Outlined.Share, enabled = sel.any { !it.isDir }) { vm.share() })
+        s.linuxRootPath?.takeIf { local && it != tab.path }?.let {
+            add(item("Copy to Linux files", Icons.Outlined.DriveFileMove) { vm.shareWithLinux() })
+        }
         add(MenuEntry.Divider)
         add(starItem(vm, s, markable))
         add(tagsItem(vm, s, markable) { self() })

@@ -58,21 +58,38 @@ fun FileKind.icon(): ImageVector = when (this) {
     FileKind.Other -> Icons.Outlined.InsertDriveFile
 }
 
-fun FileKind.tint(): Color = when (this) {
-    FileKind.Folder -> Color(0xFF5B7FD6)
-    FileKind.Image -> Color(0xFF1E8E3E)
-    FileKind.Video -> Color(0xFFC5221F)
-    FileKind.Audio -> Color(0xFF9334E6)
-    FileKind.Pdf -> Color(0xFFD93025)
-    FileKind.Document -> Color(0xFF1A73E8)
-    FileKind.Sheet -> Color(0xFF188038)
-    FileKind.Slides -> Color(0xFFE37400)
-    FileKind.Archive -> Color(0xFF8D6E00)
-    FileKind.Code -> Color(0xFF00796B)
-    FileKind.Apk -> Color(0xFF3DDC84)
-    FileKind.Text -> Color(0xFF5F6368)
-    FileKind.Other -> Color(0xFF5F6368)
+fun FileKind.tintForTheme(dark: Boolean): Color = if (dark) when (this) {
+    FileKind.Folder -> Color(0xFF8AB4F8)
+    FileKind.Image -> Color(0xFF81C995)
+    FileKind.Video -> Color(0xFFF28B82)
+    FileKind.Audio -> Color(0xFFC58AF9)
+    FileKind.Pdf -> Color(0xFFF28B82)
+    FileKind.Document -> Color(0xFF669DF6)
+    FileKind.Sheet -> Color(0xFF81C995)
+    FileKind.Slides -> Color(0xFFFCAD70)
+    FileKind.Archive -> Color(0xFFFDD663)
+    FileKind.Code -> Color(0xFF4DB6AC)
+    FileKind.Apk -> Color(0xFF5BB974)
+    FileKind.Text -> Color(0xFF9AA0A6)
+    FileKind.Other -> Color(0xFF9AA0A6)
+} else when (this) {
+    FileKind.Folder -> Color(0xFF2B57B5)
+    FileKind.Image -> Color(0xFF137333)
+    FileKind.Video -> Color(0xFFB31412)
+    FileKind.Audio -> Color(0xFF7627BB)
+    FileKind.Pdf -> Color(0xFFB31412)
+    FileKind.Document -> Color(0xFF175ABC)
+    FileKind.Sheet -> Color(0xFF137333)
+    FileKind.Slides -> Color(0xFF9E5100)
+    FileKind.Archive -> Color(0xFF7A5E00)
+    FileKind.Code -> Color(0xFF00695C)
+    FileKind.Apk -> Color(0xFF137333)
+    FileKind.Text -> Color(0xFF4E5257)
+    FileKind.Other -> Color(0xFF4E5257)
 }
+
+@Composable
+fun FileKind.tint(): Color = tintForTheme(com.droid.wayfinder.ui.theme.LocalIsDarkTheme.current)
 
 fun FileEntry.icon(): ImageVector = when {
     isServer -> Icons.Outlined.Dns
@@ -80,7 +97,12 @@ fun FileEntry.icon(): ImageVector = when {
     else -> kind.icon()
 }
 
-fun FileEntry.tint(): Color = if (isServer || isShare) Color(0xFF5B7FD6) else kind.tint()
+@Composable
+fun FileEntry.tint(): Color = if (isServer || isShare) {
+    FileKind.Folder.tintForTheme(com.droid.wayfinder.ui.theme.LocalIsDarkTheme.current)
+} else {
+    kind.tint()
+}
 
 fun pinIcon(path: String): ImageVector = when (path.substringAfterLast('/').lowercase()) {
     "download", "downloads" -> Icons.Outlined.Download

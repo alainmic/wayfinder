@@ -574,7 +574,7 @@ private fun EntryRow(vm: BrowserViewModel, s: AppState, tab: TabState, e: FileEn
     val bg = when {
         dropHover -> cs.primaryContainer
         selected -> cs.secondaryContainer
-        hovered -> cs.surfaceContainerLow
+        hovered -> cs.onSurface.copy(alpha = 0.06f)
         else -> Color.Transparent
     }
     val shape = RoundedCornerShape(if (details) 20.dp else 16.dp)
@@ -624,7 +624,7 @@ private fun GridCell(vm: BrowserViewModel, s: AppState, tab: TabState, e: FileEn
     val bg = when {
         dropHover -> cs.primaryContainer
         selected -> cs.secondaryContainer
-        hovered -> cs.surfaceContainerLow
+        hovered -> cs.onSurface.copy(alpha = 0.06f)
         else -> Color.Transparent
     }
     Column(
@@ -839,7 +839,7 @@ private fun MillerRow(s: AppState, e: FileEntry, highlighted: Boolean, selected:
         drag.active && drag.hover == e.path -> cs.primaryContainer
         selected -> cs.secondaryContainer
         highlighted -> cs.surfaceContainerHighest
-        hovered -> cs.surfaceContainerLow
+        hovered -> cs.onSurface.copy(alpha = 0.06f)
         else -> Color.Transparent
     }
     Row(

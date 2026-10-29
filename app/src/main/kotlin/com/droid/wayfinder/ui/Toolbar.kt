@@ -113,10 +113,20 @@ fun Toolbar(vm: BrowserViewModel, s: AppState) {
             NavButton(Icons.AutoMirrored.Outlined.ArrowForward, "Forward (Alt+→)", tab.canGoForward) { vm.forward() }
             NavButton(Icons.Outlined.ArrowUpward, "Up (Alt+↑)", FsPath.parent(tab.path) != null) { vm.up() }
             PathBar(vm, s, Modifier.weight(1f))
-            IconButton({ vm.refresh() }, Modifier.size(40.dp)) { Icon(Icons.Outlined.Refresh, if (s.dualPane) "Refresh (Ctrl+R)" else "Refresh (F5)") }
+            val iconBtnColors = IconButtonDefaults.iconButtonColors(
+                contentColor = cs.onSurfaceVariant,
+                disabledContentColor = cs.onSurface.copy(alpha = 0.38f),
+            )
+            IconButton({ vm.refresh() }, Modifier.size(40.dp), colors = iconBtnColors) {
+                Icon(Icons.Outlined.Refresh, if (s.dualPane) "Refresh (Ctrl+R)" else "Refresh (F5)")
+            }
             if (wide > 560.dp) {
-                IconButton({ vm.undo() }, Modifier.size(40.dp), enabled = s.canUndo) { Icon(Icons.AutoMirrored.Outlined.Undo, "Undo (Ctrl+Z)") }
-                IconButton({ vm.redo() }, Modifier.size(40.dp), enabled = s.canRedo) { Icon(Icons.AutoMirrored.Outlined.Redo, "Redo (Ctrl+Y)") }
+                IconButton({ vm.undo() }, Modifier.size(40.dp), enabled = s.canUndo, colors = iconBtnColors) {
+                    Icon(Icons.AutoMirrored.Outlined.Undo, "Undo (Ctrl+Z)")
+                }
+                IconButton({ vm.redo() }, Modifier.size(40.dp), enabled = s.canRedo, colors = iconBtnColors) {
+                    Icon(Icons.AutoMirrored.Outlined.Redo, "Redo (Ctrl+Y)")
+                }
             }
             SearchField(vm, s, Modifier.width(if (wide > 960.dp) 260.dp else if (wide > 720.dp) 190.dp else 140.dp))
             if (wide > 640.dp) ViewToggle(vm, tab.viewMode, s.dualPane)
@@ -353,8 +363,8 @@ private fun SortButton(vm: BrowserViewModel, s: AppState) {
                 .clickable { open = true }.padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Outlined.SwapVert, null, Modifier.size(18.dp))
-            Text("Sort", Modifier.padding(start = 6.dp), style = MaterialTheme.typography.labelLarge)
+            Icon(Icons.Outlined.SwapVert, null, Modifier.size(18.dp), tint = cs.onSurfaceVariant)
+            Text("Sort", Modifier.padding(start = 6.dp), style = MaterialTheme.typography.labelLarge, color = cs.onSurface)
         }
         DropdownMenu(open, { open = false }) {
             listOf(
@@ -382,11 +392,16 @@ private fun SortButton(vm: BrowserViewModel, s: AppState) {
 
 @Composable
 private fun OverflowMenu(vm: BrowserViewModel, s: AppState) {
+    val cs = MaterialTheme.colorScheme
     var open by remember { mutableStateOf(false) }
     val virtual = FsPath.isReadOnly(s.active.path)
     fun check(on: Boolean): @Composable () -> Unit = { if (on) Icon(Icons.Filled.Check, null, Modifier.size(18.dp)) else Box(Modifier.size(18.dp)) }
     Box {
-        IconButton({ open = true }, Modifier.size(40.dp)) { Icon(Icons.Outlined.MoreVert, "More") }
+        IconButton(
+            { open = true },
+            Modifier.size(40.dp),
+            colors = IconButtonDefaults.iconButtonColors(contentColor = cs.onSurfaceVariant),
+        ) { Icon(Icons.Outlined.MoreVert, "More") }
         DropdownMenu(open, { open = false }) {
             DropdownMenuItem({ Text("New folder") }, { open = false; vm.requestNewItem(true) }, enabled = !virtual, trailingIcon = { Hint("Ctrl+Shift+N") })
             DropdownMenuItem({ Text("New text file") }, { open = false; vm.requestNewItem(false) }, enabled = !virtual, trailingIcon = { Hint("Ctrl+Shift+M") })

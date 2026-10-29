@@ -215,7 +215,12 @@ private fun PermissionScreen(onGrant: () -> Unit) {
         Arrangement.Center, Alignment.CenterHorizontally,
     ) {
         Icon(Icons.Outlined.FolderOpen, null, Modifier.size(72.dp), tint = MaterialTheme.colorScheme.primary)
-        Text("Allow access to all files", Modifier.padding(top = 16.dp), style = MaterialTheme.typography.titleLarge)
+        Text(
+            "Allow access to all files",
+            Modifier.padding(top = 16.dp),
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
         Text(
             "Wayfinder needs “All files access” to browse, copy and organise folders on this device. " +
                 "Nothing leaves your device except files you explicitly copy to a network share.",

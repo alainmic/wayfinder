@@ -189,9 +189,10 @@ fun ConnectDialog(vm: BrowserViewModel, initial: ConnectConfig?, saved: List<Sav
                         testing -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                         result != null -> Row(verticalAlignment = Alignment.CenterVertically) {
                             val (msg, ok) = result!!
+                            val okColor = com.droid.wayfinder.data.FileKind.Image.tint()
                             Icon(
                                 if (ok) Icons.Outlined.CheckCircle else Icons.Outlined.ErrorOutline, null, Modifier.size(18.dp),
-                                tint = if (ok) androidx.compose.ui.graphics.Color(0xFF1E8E3E) else cs.error,
+                                tint = if (ok) okColor else cs.error,
                             )
                             Text(msg, Modifier.padding(start = 6.dp), style = MaterialTheme.typography.bodyMedium, color = if (ok) cs.onSurface else cs.error)
                         }

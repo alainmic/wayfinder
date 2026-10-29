@@ -6,6 +6,7 @@ package com.droid.wayfinder.ui.theme
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
@@ -14,6 +15,8 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -22,13 +25,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+/** Indicates whether the active [WayfinderTheme] is rendering in dark mode (including manual in-app overrides). */
+val LocalIsDarkTheme = compositionLocalOf { false }
+
 // Static fallback palette: soft blue/lavender tonal surfaces like Files by Google on large screens.
 private val LightScheme = lightColorScheme(
     primary = Color(0xFF0B57D0), onPrimary = Color.White,
     primaryContainer = Color(0xFFD3E3FD), onPrimaryContainer = Color(0xFF041E49),
     secondary = Color(0xFF445E91), onSecondary = Color.White,
     secondaryContainer = Color(0xFFC8D9FA), onSecondaryContainer = Color(0xFF001B3E),
-    tertiary = Color(0xFF6B5778), tertiaryContainer = Color(0xFFF3DAFF),
+    tertiary = Color(0xFF6B5778), onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFF3DAFF), onTertiaryContainer = Color(0xFF251431),
     background = Color(0xFFF8FAFF), onBackground = Color(0xFF1B1B1F),
     surface = Color(0xFFF8FAFF), onSurface = Color(0xFF1B1B1F),
     surfaceVariant = Color(0xFFE1E2EC), onSurfaceVariant = Color(0xFF44474F),
@@ -36,7 +43,10 @@ private val LightScheme = lightColorScheme(
     surfaceContainer = Color(0xFFE6EBF8), surfaceContainerHigh = Color(0xFFDDE4F5),
     surfaceContainerHighest = Color(0xFFD0DAF0),
     outline = Color(0xFF74777F), outlineVariant = Color(0xFFC4C6D0),
-    error = Color(0xFFB3261E),
+    error = Color(0xFFB3261E), onError = Color.White,
+    errorContainer = Color(0xFFF9DEDC), onErrorContainer = Color(0xFF410E0B),
+    inverseSurface = Color(0xFF2E3036), inverseOnSurface = Color(0xFFF0F0F7),
+    inversePrimary = Color(0xFFA8C7FA),
 )
 
 private val DarkScheme = darkColorScheme(
@@ -44,6 +54,8 @@ private val DarkScheme = darkColorScheme(
     primaryContainer = Color(0xFF0842A0), onPrimaryContainer = Color(0xFFD3E3FD),
     secondary = Color(0xFFB0C6FF), onSecondary = Color(0xFF152F60),
     secondaryContainer = Color(0xFF2D4777), onSecondaryContainer = Color(0xFFD9E2FF),
+    tertiary = Color(0xFFD7BDE4), onTertiary = Color(0xFF3B2948),
+    tertiaryContainer = Color(0xFF523F5F), onTertiaryContainer = Color(0xFFF3DAFF),
     background = Color(0xFF111318), onBackground = Color(0xFFE2E2E9),
     surface = Color(0xFF111318), onSurface = Color(0xFFE2E2E9),
     surfaceVariant = Color(0xFF44474F), onSurfaceVariant = Color(0xFFC4C6D0),
@@ -51,7 +63,14 @@ private val DarkScheme = darkColorScheme(
     surfaceContainer = Color(0xFF1D2024), surfaceContainerHigh = Color(0xFF282A2F),
     surfaceContainerHighest = Color(0xFF33353A),
     outline = Color(0xFF8E9099), outlineVariant = Color(0xFF44474F),
+    error = Color(0xFFF2B8B5), onError = Color(0xFF601410),
+    errorContainer = Color(0xFF8C1D18), onErrorContainer = Color(0xFFF9DEDC),
+    inverseSurface = Color(0xFFE2E2E9), inverseOnSurface = Color(0xFF2E3036),
+    inversePrimary = Color(0xFF0B57D0),
 )
+
+/** Returns the static Material 3 [ColorScheme] for light or dark mode. */
+fun wayfinderColorScheme(dark: Boolean): ColorScheme = if (dark) DarkScheme else LightScheme
 
 private val AppTypography = Typography(
     bodyLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 14.sp, lineHeight = 20.sp),
@@ -80,5 +99,11 @@ fun WayfinderTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable (
         dark -> DarkScheme
         else -> LightScheme
     }
-    MaterialTheme(colorScheme = scheme, typography = AppTypography, shapes = AppShapes, content = content)
+    MaterialTheme(colorScheme = scheme, typography = AppTypography, shapes = AppShapes) {
+        CompositionLocalProvider(
+            LocalContentColor provides scheme.onSurface,
+            LocalIsDarkTheme provides dark,
+            content = content,
+        )
+    }
 }

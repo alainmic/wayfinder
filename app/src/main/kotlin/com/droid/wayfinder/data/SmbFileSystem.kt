@@ -35,9 +35,9 @@ open class RemoteAuthException(val host: String, cause: Throwable? = null) :
 class SmbAuthException(host: String, cause: Throwable? = null) : RemoteAuthException(host, cause)
 
 /** SMB2/3 file system on top of smbj. Paths look like `smb://host/share/dir/file`. */
-class SmbFileSystem(private val creds: CredentialProvider) : RemoteFileSystem {
-
-    private val client = SMBClient(
+class SmbFileSystem(
+    private val creds: CredentialProvider,
+    private val client: SMBClient = SMBClient(
         SmbConfig.builder()
             .withTimeout(20, TimeUnit.SECONDS)
             .withSoTimeout(60, TimeUnit.SECONDS)
@@ -45,7 +45,11 @@ class SmbFileSystem(private val creds: CredentialProvider) : RemoteFileSystem {
             // Kerberos/SPNEGO depend on JDK classes missing on Android; NTLM is what home/office shares use.
             .withAuthenticators(listOf<Factory.Named<Authenticator>>(NtlmAuthenticator.Factory()))
             .build(),
-    )
+    ),
+    private val serverServiceFactory: (Session) -> ServerService = { s ->
+        ServerService(SMBTransportFactories.SRVSVC.getTransport(s))
+    },
+) : RemoteFileSystem {
 
     private val sessions = HashMap<String, Session>()
     private val shares = HashMap<String, DiskShare>()
@@ -136,7 +140,7 @@ class SmbFileSystem(private val creds: CredentialProvider) : RemoteFileSystem {
     private fun listShares(host: String): List<FileEntry> {
         val s = session(host)
         try {
-            val svc = ServerService(SMBTransportFactories.SRVSVC.getTransport(s))
+            val svc = serverServiceFactory(s)
             return svc.shares1
                 .filter { (it.type and 0xFFFF) == 0 && (it.type ushr 31) == 0 && !it.netName.endsWith("$") && FsPath.isSafeName(it.netName) && !it.netName.contains('\\') }
                 .map { FileEntry("smb://$host/${it.netName}", it.netName, true, isShare = true, isHidden = false) }

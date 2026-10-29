@@ -301,19 +301,23 @@ class FileOperations(private val repo: FileRepository) {
         }
 
         // Entry names are UTF-8 in modern archives; old ones use CP437, which the UTF-8 decoder rejects with an
-        // IllegalArgumentException: start over with CP437 in that case.
+        // IllegalArgumentException (or a ZipException wrapping IllegalArgumentException on JDK 24+): start over with
+        // CP437 in that case.
         val charsets = listOf(Charsets.UTF_8, java.nio.charset.Charset.forName("IBM437"))
         for ((attempt, cs) in charsets.withIndex()) {
             try {
                 extractOnce(zipPath, outDir, outCanonical, cs, total, limits, onProgress)
                 return outDir
-            } catch (e: IllegalArgumentException) {
-                runCatching { fs.delete(outDir) }
-                if (attempt == charsets.lastIndex) throw IOException("Can't read this archive: ${e.message}", e)
-                ensureDir(outDir)
             } catch (t: Throwable) {
                 runCatching { fs.delete(outDir) }
-                throw t
+                val isCharsetError = t is IllegalArgumentException ||
+                    (t is java.util.zip.ZipException && t.cause is IllegalArgumentException)
+                if (isCharsetError) {
+                    if (attempt == charsets.lastIndex) throw IOException("Can't read this archive: ${t.message}", t)
+                    ensureDir(outDir)
+                } else {
+                    throw t
+                }
             }
         }
         return outDir

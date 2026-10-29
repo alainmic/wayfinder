@@ -3,7 +3,10 @@
 
 package com.droid.wayfinder.data
 
+import android.icu.text.MessageFormat
 import java.text.Normalizer
+import java.text.NumberFormat
+import java.util.Locale
 
 /** Case-insensitive comparison that orders embedded numbers numerically (file2 < file10). */
 fun naturalCompare(a: String, b: String): Int {
@@ -69,14 +72,53 @@ fun sortEntries(
     return entries.sortedWith(cmp)
 }
 
-fun formatSize(bytes: Long): String {
-    if (bytes < 1024) return "$bytes B"
+/**
+ * Formats [bytes] into a human-readable size string using locale-aware decimal and grouping separators.
+ */
+fun formatSize(bytes: Long, locale: Locale = Locale.getDefault()): String {
+    if (bytes < 1024) {
+        val intFmt = NumberFormat.getIntegerInstance(locale)
+        return "${intFmt.format(bytes)} B"
+    }
     val units = arrayOf("KB", "MB", "GB", "TB")
     var v = bytes.toDouble()
     var u = -1
     while (v >= 1024 && u < units.lastIndex) { v /= 1024; u++ }
-    return if (v >= 100 || v == v.toLong().toDouble()) "${v.toLong()} ${units[u]}" else "%.1f %s".format(v, units[u])
+    return if (v >= 100 || v == v.toLong().toDouble()) {
+        val intFmt = NumberFormat.getIntegerInstance(locale)
+        "${intFmt.format(v.toLong())} ${units[u]}"
+    } else {
+        val decFmt = NumberFormat.getNumberInstance(locale).apply {
+            minimumFractionDigits = 1
+            maximumFractionDigits = 1
+        }
+        "${decFmt.format(v)} ${units[u]}"
+    }
 }
+
+/** Formats an item count using ICU MessageFormat plural rules (`=1` and `other`). */
+fun formatItemCount(count: Int, locale: Locale = Locale.getDefault()): String =
+    runCatching {
+        MessageFormat("{0, plural, =1 {# item} other {# items}}", locale).format(arrayOf(count))
+    }.getOrElse {
+        if (count == 1) "1 item" else "${NumberFormat.getIntegerInstance(locale).format(count)} items"
+    }
+
+/** Formats a selected-item count using ICU MessageFormat plural rules (`=1` and `other`). */
+fun formatSelectedCount(count: Int, locale: Locale = Locale.getDefault()): String =
+    runCatching {
+        MessageFormat("{0, plural, =1 {# selected} other {# selected}}", locale).format(arrayOf(count))
+    }.getOrElse {
+        "${NumberFormat.getIntegerInstance(locale).format(count)} selected"
+    }
+
+/** Formats a search result count using ICU MessageFormat plural rules (`=1` and `other`). */
+fun formatResultCount(count: Int, locale: Locale = Locale.getDefault()): String =
+    runCatching {
+        MessageFormat("{0, plural, =1 {# result} other {# results}}", locale).format(arrayOf(count))
+    }.getOrElse {
+        if (count == 1) "1 result" else "${NumberFormat.getIntegerInstance(locale).format(count)} results"
+    }
 
 /** Strips accents for forgiving search matching. */
 fun foldForSearch(s: String): String =

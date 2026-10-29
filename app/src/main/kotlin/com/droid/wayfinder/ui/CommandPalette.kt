@@ -24,8 +24,12 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
+import androidx.compose.material.icons.automirrored.outlined.Label
+import androidx.compose.material.icons.automirrored.outlined.NoteAdd
 import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
+import androidx.compose.material.icons.automirrored.outlined.ViewList
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -36,7 +40,6 @@ import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Dns
-import androidx.compose.material.icons.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Folder
@@ -45,7 +48,6 @@ import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material.icons.outlined.NoteAdd
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
@@ -57,9 +59,8 @@ import androidx.compose.material.icons.outlined.Tab
 import androidx.compose.material.icons.outlined.VerticalSplit
 import androidx.compose.material.icons.outlined.ViewColumn
 import androidx.compose.material.icons.outlined.ViewHeadline
-import androidx.compose.material.icons.outlined.ViewList
 import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material.icons.outlined.ViewSidebar
+import androidx.compose.material.icons.automirrored.outlined.ViewSidebar
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -93,7 +94,6 @@ import androidx.compose.material.icons.outlined.AppRegistration
 import androidx.compose.material.icons.outlined.Contrast
 import androidx.compose.material.icons.outlined.FindInPage
 import androidx.compose.material.icons.outlined.FolderZip
-import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MyLocation
 import androidx.compose.material.icons.outlined.StarOutline
@@ -126,7 +126,7 @@ fun paletteCommands(vm: BrowserViewModel, s: AppState): List<PaletteItem> {
         add(c("Close tab", "Close the current tab", "Ctrl+W", Icons.Outlined.Tab) { vm.closeTab(s.activeId) })
         add(c("Reopen closed tab", "Bring back the last closed tab", "Ctrl+Shift+T", Icons.Outlined.History) { vm.reopenClosedTab() })
         add(c("New folder", "Create a folder here", "Ctrl+Shift+N", Icons.Outlined.CreateNewFolder) { vm.requestNewItem(true) })
-        add(c("New text file", "Create an empty file here", "Ctrl+Shift+M", Icons.Outlined.NoteAdd) { vm.requestNewItem(false) })
+        add(c("New text file", "Create an empty file here", "Ctrl+Shift+M", Icons.AutoMirrored.Outlined.NoteAdd) { vm.requestNewItem(false) })
         add(c("Copy", "Copy the selection to the clipboard", "Ctrl+C", Icons.Outlined.ContentCopy) { vm.copy() })
         add(c("Cut", "Cut the selection", "Ctrl+X", Icons.Outlined.ContentCut) { vm.cut() })
         add(c("Paste", "Paste into the current folder", "Ctrl+V", Icons.Outlined.ContentPaste) { vm.paste() })
@@ -143,7 +143,7 @@ fun paletteCommands(vm: BrowserViewModel, s: AppState): List<PaletteItem> {
         add(c("Select all", "Select every item", "Ctrl+A", Icons.Outlined.SelectAll) { vm.selectAll() })
         add(c("Invert selection", "Select everything that isn't selected", "Ctrl+Shift+I", Icons.Outlined.SelectAll) { vm.invertSelection() })
         add(c("Clear selection", "Deselect everything", "Ctrl+Shift+A", Icons.Outlined.SelectAll) { vm.clearSelection() })
-        add(c("Details view", "Show items in a table", "Ctrl+1", Icons.Outlined.ViewList) { vm.setViewMode(ViewMode.Details) })
+        add(c("Details view", "Show items in a table", "Ctrl+1", Icons.AutoMirrored.Outlined.ViewList) { vm.setViewMode(ViewMode.Details) })
         add(c("Grid view", "Show items as icons", "Ctrl+2", Icons.Outlined.GridView) { vm.setViewMode(ViewMode.Grid) })
         add(c("Columns view", "Browse with Miller columns", "Ctrl+3", Icons.Outlined.ViewColumn) { vm.setViewMode(ViewMode.Columns) })
         add(c("List view", "Show items in a compact list", null, Icons.Outlined.ViewHeadline) { vm.setViewMode(ViewMode.List) })
@@ -151,11 +151,11 @@ fun paletteCommands(vm: BrowserViewModel, s: AppState): List<PaletteItem> {
         if (s.dualPane) {
             add(c("Switch pane", "Focus the other pane", "Tab", Icons.Outlined.SwapHoriz) { vm.switchPane() })
             add(c("Copy to other pane", "Copy the selection to the other pane's folder", "F5", Icons.Outlined.ContentCopy) { vm.transferToOtherPane(false) })
-            add(c("Move to other pane", "Move the selection to the other pane's folder", "F6", Icons.Outlined.DriveFileMove) { vm.transferToOtherPane(true) })
+            add(c("Move to other pane", "Move the selection to the other pane's folder", "F6", Icons.AutoMirrored.Outlined.DriveFileMove) { vm.transferToOtherPane(true) })
         }
         add(c("Show hidden files", if (s.showHidden) "Currently shown" else "Currently hidden", "Ctrl+H", Icons.Outlined.Visibility) { vm.toggleHidden() })
-        add(c("Toggle sidebar", "Show or hide the sidebar", "Ctrl+\\", Icons.Outlined.ViewSidebar) { vm.toggleSidebar() })
-        add(c("Toggle details pane", "Show or hide the preview pane", "Alt+P", Icons.Outlined.ViewSidebar) { vm.togglePreview() })
+        add(c("Toggle sidebar", "Show or hide the sidebar", "Ctrl+\\", Icons.AutoMirrored.Outlined.ViewSidebar) { vm.toggleSidebar() })
+        add(c("Toggle details pane", "Show or hide the preview pane", "Alt+P", Icons.AutoMirrored.Outlined.ViewSidebar) { vm.togglePreview() })
         add(c("Back", "Go to the previous folder", "Alt+←", Icons.AutoMirrored.Outlined.ArrowBack) { vm.back() })
         add(c("Forward", "Go to the next folder", "Alt+→", Icons.AutoMirrored.Outlined.ArrowForward) { vm.forward() })
         add(c("Up one level", "Go to the parent folder", "Alt+↑", Icons.Outlined.ArrowUpward) { vm.up() })
@@ -186,10 +186,10 @@ fun paletteCommands(vm: BrowserViewModel, s: AppState): List<PaletteItem> {
         }
         add(c("Add to / remove from Starred", "Star the selection (or the current folder)", null, Icons.Outlined.StarOutline) { vm.toggleStar() })
         ColorTag.entries.forEach { t ->
-            add(c("Tag: ${t.label}", "Toggle the ${t.label} color tag on the selection", null, Icons.Outlined.Label) { vm.toggleTag(t) })
+            add(c("Tag: ${t.label}", "Toggle the ${t.label} color tag on the selection", null, Icons.AutoMirrored.Outlined.Label) { vm.toggleTag(t) })
             add(c("Show ${t.label} items", "Open the ${t.label} color tag view", null, Icons.Filled.Circle) { vm.navigate(FsPath.tagPath(t)) })
         }
-        add(c(if (s.tagsColumn) "Hide Tags column" else "Show Tags column", "Details view column", null, Icons.Outlined.Label) { vm.toggleTagsColumn() })
+        add(c(if (s.tagsColumn) "Hide Tags column" else "Show Tags column", "Details view column", null, Icons.AutoMirrored.Outlined.Label) { vm.toggleTagsColumn() })
         add(c(if (s.permsColumn) "Hide Permissions column" else "Show Permissions column", "Details view column", null, Icons.Outlined.Lock) { vm.togglePermsColumn() })
         val one = tab.selectedEntries(s.showHidden).singleOrNull()
         if (one != null && !one.isDir) add(c("Open with…", "Choose an app for ${one.name}", null, Icons.Outlined.AppRegistration) { vm.openWith() })

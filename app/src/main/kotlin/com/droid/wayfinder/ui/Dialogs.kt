@@ -63,6 +63,7 @@ import androidx.compose.material3.IconButton
 import com.droid.wayfinder.data.Conflict
 import com.droid.wayfinder.data.FileInfo
 import com.droid.wayfinder.data.FsPath
+import com.droid.wayfinder.data.formatItemCount
 import com.droid.wayfinder.data.formatSize
 
 @Composable
@@ -141,7 +142,7 @@ private fun PropertiesDialog(d: Dialog.Properties, onDismiss: () -> Unit, onCopy
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.widthIn(min = 480.dp),
-        title = { Text(if (e.size == 1) e[0].name else "${e.size} items") },
+        title = { Text(if (e.size == 1) e[0].name else formatItemCount(e.size)) },
         text = {
             Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (e.size == 1) {

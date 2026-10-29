@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,13 +25,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
+import androidx.compose.material.icons.automirrored.outlined.ViewList
 import androidx.compose.material.icons.outlined.VerticalSplit
 import androidx.compose.material.icons.outlined.ViewColumn
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.ArrowUpward
-import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Delete
@@ -39,7 +41,6 @@ import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.ViewHeadline
-import androidx.compose.material.icons.outlined.ViewList
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material3.DropdownMenu
@@ -96,6 +97,7 @@ import com.droid.wayfinder.data.SearchCategory
 import com.droid.wayfinder.data.SearchScope
 import com.droid.wayfinder.data.SortKey
 import com.droid.wayfinder.data.ViewMode
+import com.droid.wayfinder.data.formatResultCount
 
 @Composable
 fun Toolbar(vm: BrowserViewModel, s: AppState) {
@@ -171,7 +173,7 @@ private fun PathBar(vm: BrowserViewModel, s: AppState, modifier: Modifier) {
         var tf by remember(tab.path) { mutableStateOf(TextFieldValue(tab.path.removePrefix("trash://"), TextRange(0, tab.path.length))) }
         var hadFocus by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) { fr.requestFocus() }
-        Row(modifier.height(40.dp).clip(shape).background(cs.surfaceContainerLowest).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier.heightIn(min = 40.dp).clip(shape).background(cs.surfaceContainerLowest).padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             BasicTextField(
                 tf, { tf = it }, Modifier.weight(1f).focusRequester(fr)
                     .semantics { contentDescription = "Address bar" }
@@ -197,16 +199,16 @@ private fun PathBar(vm: BrowserViewModel, s: AppState, modifier: Modifier) {
         val scroll = rememberScrollState()
         LaunchedEffect(tab.path, crumbs.size) { scroll.scrollTo(scroll.maxValue) }
         Row(
-            modifier.height(40.dp).clip(shape).background(cs.surfaceContainerHigh)
-                .clickable { vm.setAddressEditing(true) }.padding(horizontal = 6.dp).horizontalScroll(scroll),
+            modifier.heightIn(min = 40.dp).clip(shape).background(cs.surfaceContainerHigh)
+                .clickable { vm.setAddressEditing(true) }.padding(horizontal = 6.dp, vertical = 4.dp).horizontalScroll(scroll),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             crumbs.forEachIndexed { i, (label, path) ->
                 if (i > 0) Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp), tint = cs.onSurfaceVariant)
                 val last = i == crumbs.lastIndex
                 Box(
-                    Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).dropTarget(path)
-                        .clickable { if (!last) vm.navigate(path) else vm.setAddressEditing(true) }.padding(horizontal = 10.dp),
+                    Modifier.heightIn(min = 32.dp).clip(RoundedCornerShape(16.dp)).dropTarget(path)
+                        .clickable { if (!last) vm.navigate(path) else vm.setAddressEditing(true) }.padding(horizontal = 10.dp, vertical = 2.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -241,8 +243,8 @@ private fun SearchField(vm: BrowserViewModel, s: AppState, modifier: Modifier) {
     val focus = LocalFocusManager.current
     LaunchedEffect(s.focusSearch) { if (s.focusSearch > 0) fr.requestFocus() }
     Row(
-        modifier.height(40.dp).clip(RoundedCornerShape(24.dp)).background(cs.surfaceContainerLowest)
-            .padding(horizontal = 12.dp),
+        modifier.heightIn(min = 40.dp).clip(RoundedCornerShape(24.dp)).background(cs.surfaceContainerLowest)
+            .padding(horizontal = 12.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Outlined.Search, null, Modifier.size(18.dp), tint = cs.onSurfaceVariant)
@@ -290,7 +292,7 @@ private fun SearchFilterRow(vm: BrowserViewModel, tab: TabState) {
         }
         val n = tab.searchResults?.size
         if (n != null) Text(
-            if (tab.searching) "$n found so far…" else if (n == 1) "1 result" else "$n results",
+            if (tab.searching) "$n found so far…" else formatResultCount(n),
             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
         )
     }
@@ -320,7 +322,7 @@ private fun ViewToggle(vm: BrowserViewModel, mode: ViewMode, dual: Boolean) {
     val cs = MaterialTheme.colorScheme
     Row(Modifier.clip(RoundedCornerShape(20.dp)).background(cs.surfaceContainerHigh).padding(2.dp)) {
         listOf(
-            Triple(ViewMode.Details, Icons.Outlined.ViewList, "Details (Ctrl+1)"),
+            Triple(ViewMode.Details, Icons.AutoMirrored.Outlined.ViewList, "Details (Ctrl+1)"),
             Triple(ViewMode.List, Icons.Outlined.ViewHeadline, "List"),
             Triple(ViewMode.Grid, Icons.Outlined.GridView, "Grid (Ctrl+2)"),
             Triple(ViewMode.Columns, Icons.Outlined.ViewColumn, "Columns (Ctrl+3)"),
@@ -359,8 +361,8 @@ private fun SortButton(vm: BrowserViewModel, s: AppState) {
     val tab = s.active
     Box {
         Row(
-            Modifier.height(40.dp).clip(RoundedCornerShape(20.dp)).background(cs.surfaceContainerHigh)
-                .clickable { open = true }.padding(horizontal = 14.dp),
+            Modifier.heightIn(min = 40.dp).clip(RoundedCornerShape(20.dp)).background(cs.surfaceContainerHigh)
+                .clickable { open = true }.padding(horizontal = 14.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(Icons.Outlined.SwapVert, null, Modifier.size(18.dp), tint = cs.onSurfaceVariant)

@@ -40,8 +40,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.DriveFileMove
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
@@ -280,8 +281,10 @@ fun AppRoot(vm: BrowserViewModel) {
             Key.F2 -> vm.requestRename()
             Key.F3 -> vm.toggleDualPane()
             Key.F5 -> if (st.dualPane) vm.transferToOtherPane(move = false) else vm.refresh()
-            Key.F6 -> if (st.dualPane) vm.transferToOtherPane(move = true) else return false
-            Key.Tab -> if (st.dualPane && !shift) vm.switchPane() else return false
+            Key.F6 -> if (st.dualPane) {
+                if (tab.selection.isNotEmpty()) vm.transferToOtherPane(move = true) else vm.switchPane()
+            } else return fm.moveFocus(if (shift) FocusDirection.Previous else FocusDirection.Next)
+            Key.Tab -> if (st.dualPane && !shift) vm.switchPane() else return fm.moveFocus(if (shift) FocusDirection.Previous else FocusDirection.Next)
             Key.Delete -> vm.requestDelete(permanent = shift)
             Key.Enter, Key.NumPadEnter -> vm.openSelection()
             Key.Spacebar -> vm.toggleQuickLook()
@@ -376,7 +379,7 @@ private fun DragGhost(drag: DragController) {
         shape = RoundedCornerShape(20.dp), color = cs.inverseSurface, contentColor = cs.inverseOnSurface, shadowElevation = 6.dp,
     ) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(if (drag.copyMode) Icons.Outlined.ContentCopy else Icons.Outlined.DriveFileMove, null, Modifier.size(18.dp))
+            Icon(if (drag.copyMode) Icons.Outlined.ContentCopy else Icons.AutoMirrored.Outlined.DriveFileMove, null, Modifier.size(18.dp))
             val n = drag.paths.size
             val what = if (n == 1) FsPath.name(drag.paths[0]) else "$n items"
             val verb = if (target == FsPath.TRASH_ROOT) "Move to Trash" else if (drag.copyMode) "Copy" else "Move"

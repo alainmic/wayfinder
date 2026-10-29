@@ -4,6 +4,8 @@
 package com.droid.wayfinder.ui
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
+import androidx.compose.material.icons.automirrored.outlined.TextSnippet
 import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.AudioFile
@@ -14,14 +16,12 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderShared
 import androidx.compose.material.icons.outlined.Image
-import androidx.compose.material.icons.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.SdCard
 import androidx.compose.material.icons.outlined.Slideshow
 import androidx.compose.material.icons.outlined.TableChart
-import androidx.compose.material.icons.outlined.TextSnippet
 import androidx.compose.material.icons.outlined.VideoFile
 import androidx.compose.material.icons.outlined.Laptop
 import androidx.compose.material.icons.outlined.ImageSearch
@@ -54,8 +54,8 @@ fun FileKind.icon(): ImageVector = when (this) {
     FileKind.Archive -> Icons.Outlined.Archive
     FileKind.Code -> Icons.Outlined.Code
     FileKind.Apk -> Icons.Outlined.Android
-    FileKind.Text -> Icons.Outlined.TextSnippet
-    FileKind.Other -> Icons.Outlined.InsertDriveFile
+    FileKind.Text -> Icons.AutoMirrored.Outlined.TextSnippet
+    FileKind.Other -> Icons.AutoMirrored.Outlined.InsertDriveFile
 }
 
 fun FileKind.tintForTheme(dark: Boolean): Color = if (dark) when (this) {

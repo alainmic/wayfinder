@@ -9,17 +9,19 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.input.pointer.PointerEventPass
+import com.droid.wayfinder.data.formatItemCount
+import com.droid.wayfinder.data.formatSelectedCount
 import com.droid.wayfinder.data.sortEntries
 import android.app.Activity
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.draganddrop.DragAndDropEvent
@@ -165,8 +167,8 @@ private fun Pane(vm: BrowserViewModel, s: AppState, tab: TabState, right: Boolea
             },
     ) {
         Row(
-            Modifier.fillMaxWidth().height(32.dp).background(if (active) cs.secondaryContainer else cs.surfaceContainerLow)
-                .dropTarget(tab.path.takeIf { !FsPath.isVirtual(it) }).padding(horizontal = 12.dp),
+            Modifier.fillMaxWidth().heightIn(min = 32.dp).background(if (active) cs.secondaryContainer else cs.surfaceContainerLow)
+                .dropTarget(tab.path.takeIf { !FsPath.isVirtual(it) }).padding(horizontal = 12.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(Icons.Outlined.FolderOpen, null, Modifier.size(16.dp), tint = if (active) cs.onSecondaryContainer else cs.onSurfaceVariant)
@@ -351,7 +353,7 @@ private fun EmptyView(vm: BrowserViewModel, s: AppState, tab: TabState) {
                 OutlinedButton({ vm.openPhoneHubSettings() }) { Text("Phone Hub settings") }
                 OutlinedButton({ vm.openQuickShareFolder() }) { Text("Quick Share folder") }
             }
-            FsPath.tagOf(tab.path) != null -> CenterMessage(Icons.Outlined.Label, "Nothing tagged “${FsPath.name(tab.path)}”", "Right-click items and choose Color tags to label them.")
+            FsPath.tagOf(tab.path) != null -> CenterMessage(Icons.AutoMirrored.Outlined.Label, "Nothing tagged “${FsPath.name(tab.path)}”", "Right-click items and choose Color tags to label them.")
             FsPath.isZip(tab.path) -> CenterMessage(Icons.Outlined.FolderOpen, "This folder in the archive is empty", null)
             tab.path == FsPath.SMB_ROOT -> CenterMessage(
                 Icons.Outlined.WifiFind, if (s.scanning) "Looking for servers…" else "No servers found",
@@ -469,12 +471,12 @@ private const val SIZE_W = 88
 private const val TAGS_W = 84
 private const val PERMS_W = 100
 
-private fun showTagsCol(s: AppState, width: Dp) = s.tagsColumn && width > 440.dp
-private fun showPermsCol(s: AppState, width: Dp) = s.permsColumn && width > 480.dp
+private fun showTagsCol(s: AppState, effectiveWidth: Dp) = s.tagsColumn && effectiveWidth > 440.dp
+private fun showPermsCol(s: AppState, effectiveWidth: Dp) = s.permsColumn && effectiveWidth > 480.dp
 
 /** Right-click menu of the Details header: toggles the optional columns. */
 fun columnsMenu(vm: BrowserViewModel, s: AppState): List<MenuEntry> = listOf(
-    MenuEntry.Item("Tags column", Icons.Outlined.Label, checked = s.tagsColumn) { vm.toggleTagsColumn() },
+    MenuEntry.Item("Tags column", Icons.AutoMirrored.Outlined.Label, checked = s.tagsColumn) { vm.toggleTagsColumn() },
     MenuEntry.Item("Permissions column", Icons.Outlined.Lock, checked = s.permsColumn) { vm.togglePermsColumn() },
 )
 
@@ -482,10 +484,12 @@ fun columnsMenu(vm: BrowserViewModel, s: AppState): List<MenuEntry> = listOf(
 private fun DetailsHeader(vm: BrowserViewModel, s: AppState, tab: TabState, width: Dp) {
     val cs = MaterialTheme.colorScheme
     val menu = LocalMenu.current
+    val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.35f)
+    val effectiveWidth = width / fontScale
     var origin by remember { androidx.compose.runtime.mutableStateOf(Offset.Zero) }
     Column {
         Row(
-            Modifier.fillMaxWidth().height(36.dp)
+            Modifier.fillMaxWidth().heightIn(min = 36.dp)
                 .onGloballyPositioned { origin = it.positionInRoot() }
                 .pointerInput(Unit) {
                     awaitEachGesture {
@@ -495,7 +499,7 @@ private fun DetailsHeader(vm: BrowserViewModel, s: AppState, tab: TabState, widt
                         }
                     }
                 }
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = 24.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             @Composable
@@ -505,7 +509,7 @@ private fun DetailsHeader(vm: BrowserViewModel, s: AppState, tab: TabState, widt
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = if (end) Arrangement.End else Arrangement.Start,
                 ) {
-                    Text(label, style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+                    Text(label, style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (tab.sortKey == key) Icon(
                         if (tab.sortAsc) Icons.Outlined.ArrowUpward else Icons.Outlined.ArrowDownward,
                         if (tab.sortAsc) "Sorted ascending" else "Sorted descending", Modifier.padding(start = 4.dp).size(14.dp), tint = cs.onSurfaceVariant,
@@ -514,17 +518,17 @@ private fun DetailsHeader(vm: BrowserViewModel, s: AppState, tab: TabState, widt
             }
             Box(Modifier.width(34.dp))
             cell("Name", SortKey.Name, Modifier.weight(1f))
-            if (showTagsCol(s, width)) cell("Tags", SortKey.Tags, Modifier.width(TAGS_W.dp))
-            if (showPermsCol(s, width)) cell("Permissions", SortKey.Permissions, Modifier.width(PERMS_W.dp))
-            if (width > 520.dp) cell("Date modified", SortKey.Modified, Modifier.width(DATE_W.dp))
-            if (width > 760.dp) cell("Type", SortKey.Type, Modifier.width(TYPE_W.dp))
-            cell("Size", SortKey.Size, Modifier.width(SIZE_W.dp), end = true)
+            if (showTagsCol(s, effectiveWidth)) cell("Tags", SortKey.Tags, Modifier.width((TAGS_W * fontScale).dp))
+            if (showPermsCol(s, effectiveWidth)) cell("Permissions", SortKey.Permissions, Modifier.width((PERMS_W * fontScale).dp))
+            if (effectiveWidth > 520.dp) cell("Date modified", SortKey.Modified, Modifier.width((DATE_W * fontScale).dp))
+            if (effectiveWidth > 760.dp) cell("Type", SortKey.Type, Modifier.width((TYPE_W * fontScale).dp))
+            cell("Size", SortKey.Size, Modifier.width((SIZE_W * fontScale).dp), end = true)
         }
         HorizontalDivider(color = cs.outlineVariant.copy(alpha = 0.6f))
     }
 }
 
-private fun Modifier.fillMaxHeightCompat(): Modifier = this.height(36.dp)
+private fun Modifier.fillMaxHeightCompat(): Modifier = this.heightIn(min = 28.dp)
 
 /** Selection, drag-and-drop, click and context-menu behaviour shared by rows and grid cells. */
 @Composable
@@ -588,7 +592,9 @@ private fun EntryRow(vm: BrowserViewModel, s: AppState, tab: TabState, e: FileEn
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(e.icon(), null, Modifier.size(22.dp), tint = e.tint())
-        val tagsCol = details && showTagsCol(s, width)
+        val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.35f)
+        val effectiveWidth = width / fontScale
+        val tagsCol = details && showTagsCol(s, effectiveWidth)
         Column(Modifier.weight(1f).padding(start = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(e.name, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (selected) cs.onSecondaryContainer else cs.onSurface)
@@ -598,14 +604,14 @@ private fun EntryRow(vm: BrowserViewModel, s: AppState, tab: TabState, e: FileEn
             if (sub != null) Text(sub, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (details) {
-            if (tagsCol) Box(Modifier.width(TAGS_W.dp)) { MarkBadges(s, e.path, showStar = false) }
-            if (showPermsCol(s, width)) Text(
-                if (e.mode != 0) FileInfo.posixString(e.mode) else "—", Modifier.width(PERMS_W.dp),
+            if (tagsCol) Box(Modifier.width((TAGS_W * fontScale).dp)) { MarkBadges(s, e.path, showStar = false) }
+            if (showPermsCol(s, effectiveWidth)) Text(
+                if (e.mode != 0) FileInfo.posixString(e.mode) else "—", Modifier.width((PERMS_W * fontScale).dp),
                 style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = cs.onSurfaceVariant, maxLines = 1,
             )
-            if (width > 520.dp) Text(formatDate(e.modified), Modifier.width(DATE_W.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1)
-            if (width > 760.dp) Text(e.typeLabel, Modifier.width(TYPE_W.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(if (e.isDir) "—" else formatSize(e.size), Modifier.width(SIZE_W.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, textAlign = TextAlign.End)
+            if (effectiveWidth > 520.dp) Text(formatDate(e.modified), Modifier.width((DATE_W * fontScale).dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (effectiveWidth > 760.dp) Text(e.typeLabel, Modifier.width((TYPE_W * fontScale).dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (e.isDir) "—" else formatSize(e.size), Modifier.width((SIZE_W * fontScale).dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, textAlign = TextAlign.End)
         }
     }
 }
@@ -661,17 +667,17 @@ private fun StatusBar(vm: BrowserViewModel, s: AppState) {
     val visible = remember(tab.entries, tab.searchResults, s.showHidden) { tab.visible(s.showHidden) }
     val sel = remember(visible, tab.selection) { visible.filter { it.path in tab.selection } }
     val text = buildString {
-        append(if (visible.size == 1) "1 item" else "${visible.size} items")
+        append(formatItemCount(visible.size))
         if (sel.isNotEmpty()) {
-            append("  •  ${sel.size} selected")
+            append("  •  ${formatSelectedCount(sel.size)}")
             val bytes = sel.filter { !it.isDir }.sumOf { it.size }
             if (sel.any { !it.isDir }) append(" (${formatSize(bytes)})")
         }
         if (tab.searching) append("  •  Searching…")
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-    val roomForHint = maxWidth > 720.dp
-    Row(Modifier.fillMaxWidth().height(36.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+    val roomForHint = maxWidth > 720.dp && LocalDensity.current.fontScale <= 1.3f
+    Row(Modifier.fillMaxWidth().heightIn(min = 36.dp).padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(text, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1)
         val op = s.ops.firstOrNull()
         if (op == null && sel.isEmpty() && roomForHint) {
@@ -843,10 +849,10 @@ private fun MillerRow(s: AppState, e: FileEntry, highlighted: Boolean, selected:
         else -> Color.Transparent
     }
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 6.dp).height(32.dp).alpha(if (cut) 0.5f else 1f)
+        Modifier.fillMaxWidth().padding(horizontal = 6.dp).heightIn(min = 32.dp).alpha(if (cut) 0.5f else 1f)
             .clip(shape).background(bg)
             .then(if (focused) Modifier.border(2.dp, cs.primary.copy(alpha = 0.7f), shape) else Modifier)
-            .hoverable(hover).then(modifier).padding(horizontal = 10.dp),
+            .hoverable(hover).then(modifier).padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(e.icon(), null, Modifier.size(18.dp), tint = e.tint())

@@ -8,13 +8,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -71,7 +75,7 @@ fun PreviewPane(vm: BrowserViewModel, s: AppState, modifier: Modifier) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Details", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                IconButton({ vm.togglePreview() }, Modifier.size(32.dp)) { Icon(Icons.Outlined.Close, "Close details (Alt+P)", Modifier.size(18.dp)) }
+                IconButton({ vm.togglePreview() }, Modifier.minimumInteractiveComponentSize().sizeIn(minWidth = 40.dp, minHeight = 40.dp)) { Icon(Icons.Outlined.Close, "Close details (Alt+P)", Modifier.size(18.dp)) }
             }
             when (sel.size) {
                 0 -> {
@@ -88,10 +92,15 @@ fun PreviewPane(vm: BrowserViewModel, s: AppState, modifier: Modifier) {
                     Fact("Location", FsPath.parent(e.path) ?: e.path)
                     if (FsPath.isLocalFile(e.path)) PosixFact(e)
                     if (!e.isServer && !e.isShare) MarksEditor(vm, s, e)
-                    Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilledTonalButton({ vm.openSelection() }) { Text("Open") }
-                        if (FsPath.isLocalFile(e.path) && !e.isDir) FilledTonalButton({ vm.share() }) { Text("Share") }
-                        if (!e.isServer && !e.isShare && !FsPath.isZip(e.path)) FilledTonalButton({ vm.requestRename() }) { Text("Rename") }
+                    val btnPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                    FlowRow(
+                        Modifier.padding(top = 16.dp).fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        FilledTonalButton({ vm.openSelection() }, contentPadding = btnPadding) { Text("Open", maxLines = 1, softWrap = false) }
+                        if (FsPath.isLocalFile(e.path) && !e.isDir) FilledTonalButton({ vm.share() }, contentPadding = btnPadding) { Text("Share", maxLines = 1, softWrap = false) }
+                        if (!e.isServer && !e.isShare && !FsPath.isZip(e.path)) FilledTonalButton({ vm.requestRename() }, contentPadding = btnPadding) { Text("Rename", maxLines = 1, softWrap = false) }
                     }
                     if (!e.isDir && FsPath.isLocalFile(e.path) && (e.kind == FileKind.Text || e.kind == FileKind.Code)) TextSnippet(e)
                 }
@@ -143,10 +152,10 @@ private fun MarksEditor(vm: BrowserViewModel, s: AppState, e: FileEntry) {
     val starred = s.marks.isStarred(e.path)
     val tags = s.marks.tagsOf(e.path)
     Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("Tags", Modifier.width(84.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+        Text("Tags", Modifier.widthIn(min = 84.dp).padding(end = 8.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(
-                Modifier.size(24.dp)
+                Modifier.sizeIn(minWidth = 32.dp, minHeight = 32.dp)
                     .semantics {
                         role = Role.Checkbox
                         this.selected = starred
@@ -161,7 +170,7 @@ private fun MarksEditor(vm: BrowserViewModel, s: AppState, e: FileEntry) {
             ColorTag.entries.forEach { t ->
                 val on = t in tags
                 Box(
-                    Modifier.size(24.dp)
+                    Modifier.sizeIn(minWidth = 32.dp, minHeight = 32.dp)
                         .semantics {
                             role = Role.Checkbox
                             this.selected = on
@@ -207,7 +216,7 @@ private fun TextSnippet(e: FileEntry) {
 @Composable
 private fun Fact(label: String, value: String, mono: Boolean = false) {
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-        Text(label, Modifier.width(84.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, Modifier.widthIn(min = 84.dp).padding(end = 8.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, fontFamily = if (mono) FontFamily.Monospace else null)
     }
 }

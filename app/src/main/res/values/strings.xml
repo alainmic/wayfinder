@@ -1,7 +1,19 @@
 <resources>
-    <string name="app_name" description="Application launcher name displayed on the home screen and window title bar [CHAR_LIMIT=24]">Wayfinder</string>
-    <string name="nav_recents" description="Sidebar navigation item label for recently modified files [CHAR_LIMIT=24]">Recents</string>
-    <string name="nav_starred" description="Sidebar navigation item label for starred/bookmarked files and folders [CHAR_LIMIT=24]">Starred</string>
-    <string name="nav_trash" description="Sidebar navigation item label for the Trash folder [CHAR_LIMIT=24]">Trash</string>
-    <string name="search_placeholder" description="Placeholder text shown inside the toolbar search input field [CHAR_LIMIT=32]">Search files</string>
+    <string name="app_name" description="Application name displayed in the Android system launcher, recent apps switcher, and window title bar. [CHAR_LIMIT=20]">Wayfinder</string>
+    <string name="quick_access_section" description="Section header in the left navigation sidebar above Recents and Starred items. [CHAR_LIMIT=25]">Quick access</string>
+    <string name="pinned_section" description="Section header in the left navigation sidebar above user-pinned folders. [CHAR_LIMIT=20]">Pinned</string>
+    <string name="locations_section" description="Section header in the left navigation sidebar above local storage volumes and connected devices. [CHAR_LIMIT=25]">Locations</string>
+    <string name="google_drive_section" description="Section header in the left navigation sidebar above signed-in Google Drive accounts. [CHAR_LIMIT=25]">Google Drive</string>
+    <string name="network_and_cloud_section" description="Section header in the left navigation sidebar above SMB, WebDAV, FTP, and cloud mounts. [CHAR_LIMIT=30]">Network &amp; cloud</string>
+    <string name="color_tags_section" description="Section header in the left navigation sidebar above color tag filter rows. [CHAR_LIMIT=25]">Color tags</string>
+    <string name="nav_recents" description="Navigation item label in the sidebar and breadcrumb bar for recently modified files. [CHAR_LIMIT=20]">Recents</string>
+    <string name="nav_starred" description="Navigation item label in the sidebar and breadcrumb bar for user-starred files and folders. [CHAR_LIMIT=20]">Starred</string>
+    <string name="nav_trash" description="Navigation item label in the sidebar and breadcrumb bar for the Trash bin. [CHAR_LIMIT=20]">Trash</string>
+    <string name="search_placeholder" description="Placeholder text shown inside the toolbar search input field. [CHAR_LIMIT=32]">Search files</string>
+    <string name="search_files_placeholder" description="Placeholder hint text inside the top toolbar search input field when empty. [CHAR_LIMIT=25]">Search files</string>
+    <string name="sort_button_label" description="Button label in the top toolbar that opens the file sorting menu (verb/noun action to sort files). [CHAR_LIMIT=15]">Sort</string>
+    <string name="details_pane_title" description="Header title at the top of the right-hand file details and preview pane. [CHAR_LIMIT=20]">Details</string>
+    <string name="item_count_plural" description="Status bar and properties dialog item count summary. {0} is the number of files/folders (e.g. 1, 42). [CHAR_LIMIT=30] applies across all plural branch variants.">{0, plural, =1 {# item} other {# items}}</string>
+    <string name="selected_count_plural" description="Status bar and preview pane summary of currently selected items. {0} is the number of selected items (e.g. 1, 12). [CHAR_LIMIT=35] applies across all plural branch variants.">{0, plural, =1 {# selected} other {# selected}}</string>
+    <string name="search_result_count_plural" description="Search filter bar count of matching files found. {0} is the number of matching results (e.g. 1, 150). [CHAR_LIMIT=30] applies across all plural branch variants.">{0, plural, =1 {# result} other {# results}}</string>
 </resources>

@@ -8,6 +8,14 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
+import androidx.compose.material.icons.automirrored.outlined.Label
+import androidx.compose.material.icons.automirrored.outlined.NoteAdd
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.automirrored.outlined.Redo
+import androidx.compose.material.icons.automirrored.outlined.Undo
+import androidx.compose.material.icons.automirrored.outlined.ViewList
 import androidx.compose.material.icons.outlined.Eject
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -15,13 +23,10 @@ import androidx.compose.material.icons.outlined.ContentCut
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteForever
-import androidx.compose.material.icons.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.CreateNewFolder
-import androidx.compose.material.icons.outlined.NoteAdd
-import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Restore
@@ -29,18 +34,13 @@ import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Tab
 import androidx.compose.material.icons.outlined.Unarchive
-import androidx.compose.material.icons.outlined.ViewList
 import androidx.compose.material.icons.outlined.GridView
-import androidx.compose.material.icons.outlined.Undo
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CopyAll
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
-import androidx.compose.material.icons.outlined.Redo
 import androidx.compose.material.icons.outlined.VerticalSplit
 import androidx.compose.material.icons.outlined.ViewColumn
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Star
@@ -50,7 +50,6 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Smartphone
 import androidx.compose.material.icons.outlined.AddToDrive
-import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.Web
 import androidx.compose.material.icons.outlined.FindInPage
@@ -154,7 +153,7 @@ fun starItem(vm: BrowserViewModel, s: AppState, paths: List<String>): MenuEntry 
 
 /** "Color tags ›" submenu that toggles tags on [paths]; a check marks tags every item already has. */
 fun tagsItem(vm: BrowserViewModel, s: AppState, paths: List<String>, back: (() -> List<MenuEntry>)?): MenuEntry =
-    MenuEntry.Item("Color tags", Icons.Outlined.Label, enabled = paths.isNotEmpty(), submenu = {
+    MenuEntry.Item("Color tags", Icons.AutoMirrored.Outlined.Label, enabled = paths.isNotEmpty(), submenu = {
         buildList {
             if (back != null) add(MenuEntry.Item("Back", Icons.AutoMirrored.Outlined.ArrowBack, submenu = back) {})
             ColorTag.entries.forEach { t ->
@@ -184,7 +183,7 @@ fun fileMenu(vm: BrowserViewModel, s: AppState, entry: FileEntry): List<MenuEntr
     val markable = sel.filter { !it.isServer && !it.isShare }.map { it.path }
     lateinit var self: () -> List<MenuEntry>
     val list = buildList {
-        add(item("Open", Icons.Outlined.OpenInNew, "Enter") { vm.openSelection() })
+        add(item("Open", Icons.AutoMirrored.Outlined.OpenInNew, "Enter") { vm.openSelection() })
         if (isArchive) add(item("Browse archive", Icons.Outlined.FolderZip) { vm.browseArchive(entry.path) })
         if (dirs.isNotEmpty()) add(item("Open in new tab", Icons.Outlined.Tab, "Ctrl+Enter") { vm.openSelection(newTab = true) })
         if (single && entry.isDir && !entry.isServer) add(item("Open in new window", Icons.Outlined.Web) { vm.newWindow(entry.path) })
@@ -205,7 +204,7 @@ fun fileMenu(vm: BrowserViewModel, s: AppState, entry: FileEntry): List<MenuEntr
         if (local && !inZip) add(item("Duplicate", Icons.Outlined.CopyAll, "Ctrl+D") { vm.duplicate() })
         s.otherPane?.takeIf { local && !FsPath.isVirtual(it.path) && it.path != tab.path }?.let {
             add(item("Copy to other pane", Icons.Outlined.ContentCopy, "F5") { vm.transferToOtherPane(false) })
-            add(item("Move to other pane", Icons.Outlined.DriveFileMove, "F6") { vm.transferToOtherPane(true) })
+            add(item("Move to other pane", Icons.AutoMirrored.Outlined.DriveFileMove, "F6") { vm.transferToOtherPane(true) })
         }
         add(MenuEntry.Divider)
         add(item("Rename", Icons.Outlined.Edit, "F2", enabled = single && local && !inZip) { vm.requestRename() })
@@ -249,15 +248,15 @@ fun backgroundMenu(vm: BrowserViewModel, s: AppState): List<MenuEntry> {
     )
     return listOf(
         item("New folder", Icons.Outlined.CreateNewFolder, "Ctrl+Shift+N", enabled = !virtual) { vm.requestNewItem(true) },
-        item("New text file", Icons.Outlined.NoteAdd, "Ctrl+Shift+M", enabled = !virtual) { vm.requestNewItem(false) },
+        item("New text file", Icons.AutoMirrored.Outlined.NoteAdd, "Ctrl+Shift+M", enabled = !virtual) { vm.requestNewItem(false) },
         MenuEntry.Divider,
         item("Paste", Icons.Outlined.ContentPaste, "Ctrl+V", enabled = s.clipboard != null && !virtual) { vm.paste() },
-        item("Undo", Icons.Outlined.Undo, "Ctrl+Z", enabled = s.canUndo) { vm.undo() },
-        item("Redo", Icons.Outlined.Redo, "Ctrl+Y", enabled = s.canRedo) { vm.redo() },
+        item("Undo", Icons.AutoMirrored.Outlined.Undo, "Ctrl+Z", enabled = s.canUndo) { vm.undo() },
+        item("Redo", Icons.AutoMirrored.Outlined.Redo, "Ctrl+Y", enabled = s.canRedo) { vm.redo() },
         item("Select all", Icons.Outlined.SelectAll, "Ctrl+A") { vm.selectAll() },
         MenuEntry.Divider,
-        item("Details view", Icons.Outlined.ViewList, "Ctrl+1", enabled = tab.viewMode != ViewMode.Details) { vm.setViewMode(ViewMode.Details) },
-        item("List view", Icons.Outlined.ViewList, enabled = tab.viewMode != ViewMode.List) { vm.setViewMode(ViewMode.List) },
+        item("Details view", Icons.AutoMirrored.Outlined.ViewList, "Ctrl+1", enabled = tab.viewMode != ViewMode.Details) { vm.setViewMode(ViewMode.Details) },
+        item("List view", Icons.AutoMirrored.Outlined.ViewList, enabled = tab.viewMode != ViewMode.List) { vm.setViewMode(ViewMode.List) },
         item("Grid view", Icons.Outlined.GridView, "Ctrl+2", enabled = tab.viewMode != ViewMode.Grid) { vm.setViewMode(ViewMode.Grid) },
         item("Columns view", Icons.Outlined.ViewColumn, "Ctrl+3", enabled = tab.viewMode != ViewMode.Columns) { vm.setViewMode(ViewMode.Columns) },
         item(if (s.dualPane) "Close dual pane" else "Dual pane", Icons.Outlined.VerticalSplit, "Ctrl+4") { vm.toggleDualPane() },
@@ -275,8 +274,8 @@ fun sidebarMenu(vm: BrowserViewModel, s: AppState, path: String, pinned: Boolean
     if (!FsPath.isVirtual(path) && !FsPath.isZip(path)) {
         if (pinned) {
             add(MenuEntry.Divider)
-            add(item("Move up", Icons.Outlined.DriveFileMove) { vm.movePin(path, -1) })
-            add(item("Move down", Icons.Outlined.DriveFileMove) { vm.movePin(path, 1) })
+            add(item("Move up", Icons.AutoMirrored.Outlined.DriveFileMove) { vm.movePin(path, -1) })
+            add(item("Move down", Icons.AutoMirrored.Outlined.DriveFileMove) { vm.movePin(path, 1) })
             add(item("Unpin from sidebar", Icons.Outlined.PushPin) { vm.unpin(path) })
         } else add(item("Pin to sidebar", Icons.Outlined.PushPin) { vm.pin(path) })
     }

@@ -17,8 +17,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -35,9 +37,9 @@ import com.droid.wayfinder.data.ColorTag
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Folder
@@ -267,7 +269,7 @@ fun Sidebar(vm: BrowserViewModel, s: AppState, modifier: Modifier) {
 @Composable
 private fun HeaderAction(icon: ImageVector, desc: String, onClick: () -> Unit) {
     Box(
-        Modifier.size(24.dp).clip(RoundedCornerShape(12.dp)).mouseGestures(desc, onClick = { _, _, _ -> onClick() }),
+        Modifier.sizeIn(minWidth = 28.dp, minHeight = 28.dp).clip(RoundedCornerShape(14.dp)).mouseGestures(desc, onClick = { _, _, _ -> onClick() }),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, desc, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
 }
@@ -335,18 +337,18 @@ private fun SidebarItem(
     }
     val itemHeight = if (subtitle != null) 44.dp else 36.dp
     Row(
-        Modifier.fillMaxWidth().height(itemHeight).clip(RoundedCornerShape(18.dp)).background(bg).hoverable(hover)
+        Modifier.fillMaxWidth().heightIn(min = itemHeight).clip(RoundedCornerShape(18.dp)).background(bg).hoverable(hover)
             .dropTarget(dropPath)
             .mouseGestures(
                 label + depth + dropPath + subtitle.orEmpty(),
                 onClick = { _, _, _ -> onClick() }, onMiddle = onMiddle,
                 onSecondary = onSecondary, onLongPress = onSecondary,
             )
-            .padding(start = 6.dp + 14.dp * depth, end = 10.dp),
+            .padding(start = 6.dp + 14.dp * depth, end = 10.dp, top = 2.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(24.dp).clip(RoundedCornerShape(12.dp)).then(
+            Modifier.sizeIn(minWidth = 28.dp, minHeight = 28.dp).clip(RoundedCornerShape(14.dp)).then(
                 if (expandable) Modifier.mouseGestures("toggle$label$depth", onClick = { _, _, _ -> onToggle() }) else Modifier,
             ),
             contentAlignment = Alignment.Center,

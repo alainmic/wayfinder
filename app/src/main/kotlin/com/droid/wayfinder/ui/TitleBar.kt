@@ -27,13 +27,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.FolderZip
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material.icons.outlined.Smartphone
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Icon
@@ -87,7 +87,8 @@ fun rememberCaptionMetrics(): CaptionMetrics {
             }
             if (!found) end = with(density) { 140.dp.roundToPx() }
         }
-        with(density) { CaptionMetrics(max(44.dp, maxOf(capTop, statusTop).toDp()), start.toDp(), end.toDp()) }
+        val minCaptionH = (44f * density.fontScale.coerceIn(1f, 1.35f)).dp
+        with(density) { CaptionMetrics(max(minCaptionH, maxOf(capTop, statusTop).toDp()), start.toDp(), end.toDp()) }
     }
 }
 
@@ -176,7 +177,7 @@ private fun TabItem(
                 tab.path == FsPath.RECENTS_ROOT -> Icons.Outlined.History
                 tab.path == FsPath.STARRED_ROOT -> Icons.Outlined.StarOutline
                 tab.path == FsPath.PHONE_ROOT -> if (s.phoneConnected) Icons.Outlined.Smartphone else pinIcon(tab.path)
-                FsPath.tagOf(tab.path) != null -> Icons.Outlined.Label
+                FsPath.tagOf(tab.path) != null -> Icons.AutoMirrored.Outlined.Label
                 FsPath.isZip(tab.path) -> Icons.Outlined.FolderZip
                 else -> pinIcon(tab.path)
             }

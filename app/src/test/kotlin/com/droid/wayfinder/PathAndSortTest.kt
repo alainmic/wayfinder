@@ -88,4 +88,15 @@ class SortingTest {
         assertEquals("1 KB", formatSize(1024))
         assertEquals("1.5 MB", formatSize(1_572_864))
     }
+
+    @Test fun localizedDateFormattingRespectsLocaleAndZeroTimestamps() {
+        assertEquals("", com.droid.wayfinder.ui.formatDate(0L))
+        assertEquals("—", com.droid.wayfinder.ui.formatDateFull(0L))
+        val now = System.currentTimeMillis()
+        val usFormatted = com.droid.wayfinder.ui.formatDate(now, java.util.Locale.US)
+        val ukFormatted = com.droid.wayfinder.ui.formatDate(now, java.util.Locale.UK)
+        assertTrue(usFormatted.isNotBlank())
+        assertTrue(ukFormatted.isNotBlank())
+        assertTrue(com.droid.wayfinder.ui.formatDateFull(now, java.util.Locale.US).isNotBlank())
+    }
 }

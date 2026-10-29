@@ -93,22 +93,25 @@ fun pinIcon(path: String): ImageVector = when (path.substringAfterLast('/').lowe
 
 fun rootIcon(removable: Boolean): ImageVector = if (removable) Icons.Outlined.SdCard else Icons.Outlined.Laptop
 
-private val timeFmt = DateFormat.getTimeInstance(DateFormat.SHORT)
-private val dateFmt = DateFormat.getDateInstance(DateFormat.MEDIUM)
-
-fun formatDate(ms: Long): String {
+fun formatDate(ms: Long, locale: Locale = Locale.getDefault()): String {
     if (ms <= 0) return ""
     val d = Date(ms)
-    val now = Calendar.getInstance()
-    val c = Calendar.getInstance().apply { time = d }
+    val now = Calendar.getInstance(locale)
+    val c = Calendar.getInstance(locale).apply { time = d }
     val sameYear = now.get(Calendar.YEAR) == c.get(Calendar.YEAR)
     return if (sameYear) {
-        java.text.SimpleDateFormat("MMM d", Locale.getDefault()).format(d) + ", " + timeFmt.format(d)
-    } else dateFmt.format(d)
+        runCatching {
+            android.icu.text.DateFormat.getInstanceForSkeleton("MMMdjm", locale).format(d)
+        }.getOrElse {
+            DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, locale).format(d)
+        }
+    } else {
+        DateFormat.getDateInstance(DateFormat.MEDIUM, locale).format(d)
+    }
 }
 
-fun formatDateFull(ms: Long): String =
-    if (ms <= 0) "—" else DateFormat.getDateTimeInstance(DateFormat.LONG, DateFormat.SHORT).format(Date(ms))
+fun formatDateFull(ms: Long, locale: Locale = Locale.getDefault()): String =
+    if (ms <= 0) "—" else DateFormat.getDateTimeInstance(DateFormat.LONG, DateFormat.SHORT, locale).format(Date(ms))
 
 /**
  * Authentic 3-color Google Drive emblem (Yellow, Green, Blue) rendered via Canvas.

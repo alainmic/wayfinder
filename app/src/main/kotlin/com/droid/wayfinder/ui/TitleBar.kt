@@ -51,11 +51,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import com.droid.wayfinder.data.FsPath
@@ -70,25 +72,31 @@ data class CaptionMetrics(val height: Dp, val start: Dp, val end: Dp)
 fun rememberCaptionMetrics(): CaptionMetrics {
     val density = LocalDensity.current
     val view = LocalView.current
+    val layoutDir = LocalLayoutDirection.current
     val capTop = WindowInsets.captionBar.getTop(density)
     val statusTop = WindowInsets.statusBars.getTop(density)
     val widthPx = LocalWindowInfo.current.containerSize.width
-    return remember(capTop, statusTop, widthPx) {
-        var start = 0
-        var end = 0
+    return remember(capTop, statusTop, widthPx, layoutDir) {
+        var left = 0
+        var right = 0
         if (capTop > 0) {
             var found = false
             if (Build.VERSION.SDK_INT >= 35) {
                 val rects = view.rootWindowInsets?.getBoundingRects(android.view.WindowInsets.Type.captionBar()).orEmpty()
                 for (r in rects) {
                     if (r.isEmpty) continue
-                    if (r.left < widthPx * 0.25f) { start = maxOf(start, r.right); found = true }
-                    else if (r.right > widthPx * 0.75f) { end = maxOf(end, widthPx - r.left); found = true }
+                    if (r.left < widthPx * 0.25f) { left = maxOf(left, r.right); found = true }
+                    else if (r.right > widthPx * 0.75f) { right = maxOf(right, widthPx - r.left); found = true }
                 }
             }
-            if (!found) end = with(density) { 140.dp.roundToPx() }
+            if (!found) {
+                val fallbackPx = with(density) { 140.dp.roundToPx() }
+                if (layoutDir == LayoutDirection.Rtl) left = fallbackPx else right = fallbackPx
+            }
         }
-        with(density) { CaptionMetrics(max(44.dp, maxOf(capTop, statusTop).toDp()), start.toDp(), end.toDp()) }
+        val startPx = if (layoutDir == LayoutDirection.Rtl) right else left
+        val endPx = if (layoutDir == LayoutDirection.Rtl) left else right
+        with(density) { CaptionMetrics(max(44.dp, maxOf(capTop, statusTop).toDp()), startPx.toDp(), endPx.toDp()) }
     }
 }
 

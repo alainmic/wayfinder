@@ -182,16 +182,19 @@ fun Sidebar(vm: BrowserViewModel, s: AppState, modifier: Modifier) {
         item { SectionTitle("Pinned") }; n++
         if (s.pins.isEmpty()) {
             item {
-                Text("Right-click a folder and choose “Pin to sidebar”", Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                Text("Right-click a file or folder and choose “Pin to sidebar”", Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
             n++
         }
         items(s.pins, key = { "pin$it" }) { p ->
+            val isLocalFile = FsPath.isLocalFile(p) && java.io.File(p).isFile
             SidebarItem(
-                label = s.titleOf(p), icon = pinIcon(p), depth = 0, selected = p == activePath, dropPath = p,
-                trailing = { Icon(Icons.Filled.PushPin, "Pinned", Modifier.size(16.dp), tint = cs.onSurfaceVariant) },
-                onClick = { vm.navigate(p) }, onMiddle = { vm.newTab(p, activate = false) },
+                label = s.titleOf(p), icon = pinIcon(p), depth = 0,
+                selected = p == activePath || (isLocalFile && p in s.active.selection),
+                dropPath = p.takeIf { !isLocalFile },
+                trailing = { HeaderAction(Icons.Filled.PushPin, "Unpin ${s.titleOf(p)}") { vm.unpin(p) } },
+                onClick = { vm.openPinned(p) }, onMiddle = { vm.openPinned(p, newTab = true) },
                 onSecondary = { menu.show(it, sidebarMenu(vm, s, p, true)) },
             )
         }
@@ -333,7 +336,7 @@ private fun TreeItem(vm: BrowserViewModel, s: AppState, r: TreeRowData, activePa
                 HeaderAction(Icons.Outlined.Eject, "Unmount ${phone.name}") { vm.eject(mount) }
             })
             mount != null -> ({ HeaderAction(Icons.Outlined.Eject, if (mount.saf) "Unmount ${mount.label}" else "Disconnect ${mount.label}") { vm.eject(mount) } })
-            r.path in s.pins -> ({ Icon(Icons.Filled.PushPin, "Pinned", Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) })
+            r.path in s.pins -> ({ HeaderAction(Icons.Filled.PushPin, "Unpin ${r.label}") { vm.unpin(r.path) } })
             else -> null
         },
         onClick = {

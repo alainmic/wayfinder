@@ -242,8 +242,9 @@ fun AppRoot(vm: BrowserViewModel) {
                 k == Key.R -> { vm.refresh(); return true }
                 k == Key.Backslash -> { vm.toggleSidebar(); return true }
                 k == Key.B -> {
-                    val target = tab.selectedEntries(st.showHidden).singleOrNull()?.takeIf { it.isDir }?.path ?: tab.path
-                    vm.togglePin(target); return true
+                    val targets = tab.selectedEntries(st.showHidden).filter { !it.isServer && !it.isShare && !FsPath.isZip(it.path) }.map { it.path }
+                    if (targets.isNotEmpty()) vm.togglePins(targets) else vm.togglePin(tab.path)
+                    return true
                 }
                 k == Key.D && !shift -> { vm.duplicate(); return true }
                 k == Key.N && shift -> { vm.requestNewItem(true); return true }

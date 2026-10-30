@@ -162,8 +162,15 @@ fun paletteCommands(vm: BrowserViewModel, s: AppState): List<PaletteItem> {
         add(c("Refresh", "Reload the current folder", if (s.dualPane) "Ctrl+R" else "F5 / Ctrl+R", Icons.Outlined.Refresh) { vm.refresh() })
         add(c("Edit address", "Type a path", "Ctrl+L", Icons.Outlined.Edit) { vm.setAddressEditing(true) })
         add(c("Search", "Search this folder and subfolders", "Ctrl+F", Icons.Outlined.Search) { vm.requestSearchFocus() })
-        val pinned = tab.path in s.pins
-        add(c(if (pinned) "Unpin folder" else "Pin folder", "Pin the current folder to the sidebar", "Ctrl+B", Icons.Outlined.PushPin) { vm.togglePin(tab.path) })
+        val pinTargets = tab.selectedEntries(s.showHidden).filter { !it.isServer && !it.isShare && !FsPath.isZip(it.path) && !FsPath.isVirtual(it.path) }.map { it.path }
+        val effectivePinTargets = pinTargets.ifEmpty { listOf(tab.path).filter { !FsPath.isVirtual(it) && !FsPath.isZip(it) } }
+        val pinned = effectivePinTargets.isNotEmpty() && effectivePinTargets.all { it in s.pins }
+        val pinLabel = when {
+            pinTargets.size > 1 -> if (pinned) "Unpin selection" else "Pin selection"
+            pinTargets.size == 1 && !tab.selectedEntries(s.showHidden).first().isDir -> if (pinned) "Unpin file" else "Pin file"
+            else -> if (pinned) "Unpin folder" else "Pin folder"
+        }
+        add(c(pinLabel, "Pin or unpin in the sidebar", "Ctrl+B", Icons.Outlined.PushPin) { vm.togglePins(effectivePinTargets) })
         add(c("Connect to server", "SMB, WebDAV or FTP location", "Ctrl+Shift+K", Icons.Outlined.Dns) { vm.showConnectDialog() })
         add(c("Mount cloud / storage provider", "Google Drive, USB, … via the system picker", null, Icons.Outlined.Dns) { vm.requestMountSaf() })
         add(c("Network", "Browse servers on your network", null, Icons.Outlined.Dns) { vm.navigate(FsPath.SMB_ROOT) })

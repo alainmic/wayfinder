@@ -477,6 +477,7 @@ class BrowserViewModelQaTest {
     @Test fun pinsAddRemoveReorderAndPersist() {
         val h = harness()
         h.dir("p1"); h.dir("p2"); h.dir("p3")
+        val f1 = h.file("p1/note.txt", "hello")
         h.vm.pin(h.pathOf("p1")); h.vm.pin(h.pathOf("p2")); h.vm.togglePin(h.pathOf("p3"))
         assertEquals(listOf("p1", "p2", "p3"), h.s.pins.map { File(it).name })
         h.vm.movePin(h.pathOf("p3"), -2)
@@ -484,6 +485,20 @@ class BrowserViewModelQaTest {
         h.vm.movePin(h.pathOf("p3"), -1) // out of range: ignored
         h.vm.togglePin(h.pathOf("p1"))
         assertEquals(listOf("p3", "p2"), h.s.pins.map { File(it).name })
+        // Pinning and unpinning regular files via togglePins and openPinned
+        h.vm.togglePins(listOf(f1.path))
+        assertTrue(f1.path in h.s.pins)
+        h.vm.openPinned(f1.path); h.settle()
+        assertEquals(h.pathOf("p1"), h.s.active.path)
+        assertEquals(setOf(f1.path), h.s.active.selection)
+        assertEquals(f1.path, h.events.filterIsInstance<UiEvent.OpenFile>().last().path)
+        // Renaming a pinned file updates its path in pins
+        h.vm.rename(f1.path, "renamed.txt"); h.settle()
+        val renamedPath = h.pathOf("p1/renamed.txt")
+        assertTrue(renamedPath in h.s.pins)
+        assertFalse(f1.path in h.s.pins)
+        h.vm.togglePins(listOf(renamedPath))
+        assertFalse(renamedPath in h.s.pins)
         h.vm.pin(FsPath.TRASH_ROOT) // virtual: ignored
         h.close(); harnesses.remove(h)
         assertEquals(listOf("p3", "p2"), harness().s.pins.map { File(it).name })

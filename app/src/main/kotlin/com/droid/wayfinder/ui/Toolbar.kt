@@ -408,6 +408,16 @@ private fun OverflowMenu(vm: BrowserViewModel, s: AppState) {
             DropdownMenuItem({ Text("New folder") }, { open = false; vm.requestNewItem(true) }, enabled = !virtual, trailingIcon = { Hint("Ctrl+Shift+N") })
             DropdownMenuItem({ Text("New text file") }, { open = false; vm.requestNewItem(false) }, enabled = !virtual, trailingIcon = { Hint("Ctrl+Shift+M") })
             DropdownMenuItem({ Text("Select all") }, { open = false; vm.selectAll() }, trailingIcon = { Hint("Ctrl+A") })
+            val pinTargets = s.active.selectedEntries(s.showHidden).filter { !it.isServer && !it.isShare && !FsPath.isZip(it.path) && !FsPath.isVirtual(it.path) }.map { it.path }
+                .ifEmpty { listOf(s.active.path).filter { !FsPath.isVirtual(it) && !FsPath.isZip(it) } }
+            if (pinTargets.isNotEmpty()) {
+                val pinned = pinTargets.all { it in s.pins }
+                DropdownMenuItem(
+                    { Text(if (pinned) "Unpin from sidebar" else "Pin to sidebar") },
+                    { open = false; vm.togglePins(pinTargets) },
+                    trailingIcon = { Hint("Ctrl+B") },
+                )
+            }
             DropdownMenuItem({ Text("Batch rename…") }, { open = false; vm.requestBatchRename() }, enabled = !virtual, trailingIcon = { Hint("Ctrl+Shift+R") })
             DropdownMenuItem({ Text("Undo") }, { open = false; vm.undo() }, enabled = s.canUndo, trailingIcon = { Hint("Ctrl+Z") })
             DropdownMenuItem({ Text("Redo") }, { open = false; vm.redo() }, enabled = s.canRedo, trailingIcon = { Hint("Ctrl+Y") })

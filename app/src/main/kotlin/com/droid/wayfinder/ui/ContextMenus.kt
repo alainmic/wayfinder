@@ -219,9 +219,10 @@ fun fileMenu(vm: BrowserViewModel, s: AppState, entry: FileEntry): List<MenuEntr
         add(MenuEntry.Divider)
         add(starItem(vm, s, markable))
         add(tagsItem(vm, s, markable) { self() })
-        if (single && entry.isDir && !inZip) {
-            val pinned = entry.path in s.pins
-            add(item(if (pinned) "Unpin from sidebar" else "Pin to sidebar", Icons.Outlined.PushPin, "Ctrl+B") { vm.togglePin(entry.path) })
+        val pinnable = markable.filter { !FsPath.isVirtual(it) && !FsPath.isZip(it) }
+        if (pinnable.isNotEmpty()) {
+            val pinned = pinnable.all { it in s.pins }
+            add(item(if (pinned) "Unpin from sidebar" else "Pin to sidebar", Icons.Outlined.PushPin, "Ctrl+B") { vm.togglePins(pinnable) })
         }
         add(MenuEntry.Divider)
         add(item("Delete", Icons.Outlined.Delete, "Del", enabled = !entry.isServer && !entry.isShare && !inZip) { vm.requestDelete() })
@@ -272,9 +273,14 @@ fun backgroundMenu(vm: BrowserViewModel, s: AppState): List<MenuEntry> {
 }
 
 fun sidebarMenu(vm: BrowserViewModel, s: AppState, path: String, pinned: Boolean): List<MenuEntry> = buildList {
-    add(item("Open", Icons.Outlined.FolderOpen) { vm.navigate(path) })
-    add(item("Open in new tab", Icons.Outlined.Tab) { vm.newTab(path, activate = true) })
-    add(item("Open in new window", Icons.Outlined.Web) { vm.newWindow(path) })
+    val isLocalFile = FsPath.isLocalFile(path) && java.io.File(path).isFile
+    add(item("Open", if (isLocalFile) Icons.AutoMirrored.Outlined.OpenInNew else Icons.Outlined.FolderOpen) { if (pinned) vm.openPinned(path) else vm.navigate(path) })
+    if (isLocalFile) {
+        add(item("Show in enclosing folder", Icons.Outlined.FindInPage) { vm.showInEnclosingFolder(path) })
+    } else {
+        add(item("Open in new tab", Icons.Outlined.Tab) { vm.newTab(path, activate = true) })
+        add(item("Open in new window", Icons.Outlined.Web) { vm.newWindow(path) })
+    }
     if (!FsPath.isVirtual(path) && !FsPath.isZip(path)) {
         if (pinned) {
             add(MenuEntry.Divider)

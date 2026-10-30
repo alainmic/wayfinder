@@ -241,6 +241,19 @@ class QuickLookAndMenusCoverageTest {
         idle()
         assertFalse(dirFile.path in hh.s.pins)
 
+        // fileMenu on a regular file also includes Pin to sidebar / Unpin from sidebar
+        val docEntry = hh.s.active.entries.single { it.path == itemFile.path }
+        val fileMenuPin = fileMenu(hh.vm, hh.s, docEntry).filterIsInstance<MenuEntry.Item>().single { it.label == "Pin to sidebar" }
+        fileMenuPin.action()
+        idle()
+        assertTrue(itemFile.path in hh.s.pins)
+        val pinnedFileSidebarMenu = sidebarMenu(hh.vm, hh.s, itemFile.path, pinned = true).filterIsInstance<MenuEntry.Item>()
+        assertTrue(pinnedFileSidebarMenu.any { it.label == "Show in enclosing folder" })
+        val fileMenuUnpin = fileMenu(hh.vm, hh.s, docEntry).filterIsInstance<MenuEntry.Item>().single { it.label == "Unpin from sidebar" }
+        fileMenuUnpin.action()
+        idle()
+        assertFalse(itemFile.path in hh.s.pins)
+
         val smbRootItems = sidebarMenu(hh.vm, hh.s, "smb://nas.local", pinned = false).filterIsInstance<MenuEntry.Item>()
         assertTrue(smbRootItems.any { it.label == "Remove server" })
         smbRootItems.single { it.label == "Remove server" }.action()

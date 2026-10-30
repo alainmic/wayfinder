@@ -50,7 +50,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -101,6 +103,12 @@ fun PreviewPane(vm: BrowserViewModel, s: AppState, modifier: Modifier) {
                     ) {
                         FilledTonalButton({ vm.openSelection() }, contentPadding = btnPadding) { Text("Open", maxLines = 1, softWrap = false) }
                         if (FsPath.isLocalFile(e.path) && !e.isDir) FilledTonalButton({ vm.share() }, contentPadding = btnPadding) { Text("Share", maxLines = 1, softWrap = false) }
+                        if (!e.isServer && !e.isShare && !FsPath.isZip(e.path) && !FsPath.isVirtual(e.path)) {
+                            val pinned = e.path in s.pins
+                            FilledTonalButton({ vm.togglePin(e.path) }, contentPadding = btnPadding) {
+                                Text(if (pinned) "Unpin" else "Pin", maxLines = 1, softWrap = false)
+                            }
+                        }
                         if (!e.isServer && !e.isShare && !FsPath.isZip(e.path)) FilledTonalButton({ vm.requestRename() }, contentPadding = btnPadding) { Text("Rename", maxLines = 1, softWrap = false) }
                     }
                     if (!e.isDir && FsPath.isLocalFile(e.path) && (e.kind == FileKind.Text || e.kind == FileKind.Code)) TextSnippet(e)
@@ -146,15 +154,35 @@ private fun PosixFact(e: FileEntry) {
     info?.let { p -> Fact("Mode", "${FileInfo.posixString(p.mode)} (${FileInfo.octal(p.mode)})\nuid ${p.uid} / gid ${p.gid}", mono = true) }
 }
 
-/** Star toggle and color-tag chips for one item. */
+/** Star, pin, and color-tag chips for one item. */
 @Composable
 private fun MarksEditor(vm: BrowserViewModel, s: AppState, e: FileEntry) {
     val cs = MaterialTheme.colorScheme
     val starred = s.marks.isStarred(e.path)
+    val pinned = e.path in s.pins
     val tags = s.marks.tagsOf(e.path)
     Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("Tags", Modifier.widthIn(min = 84.dp).padding(end = 8.dp), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (!FsPath.isVirtual(e.path) && !FsPath.isZip(e.path)) {
+                Box(
+                    Modifier.sizeIn(minWidth = 32.dp, minHeight = 32.dp)
+                        .semantics {
+                            role = Role.Checkbox
+                            this.selected = pinned
+                        }
+                        .clip(CircleShape)
+                        .clickable(onClickLabel = if (pinned) "Unpin from sidebar" else "Pin to sidebar") { vm.togglePin(e.path) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        if (pinned) androidx.compose.material.icons.Icons.Filled.PushPin else androidx.compose.material.icons.Icons.Outlined.PushPin,
+                        if (pinned) "Unpin from sidebar" else "Pin to sidebar",
+                        Modifier.size(20.dp),
+                        tint = if (pinned) cs.primary else cs.onSurfaceVariant,
+                    )
+                }
+            }
             Box(
                 Modifier.sizeIn(minWidth = 32.dp, minHeight = 32.dp)
                     .semantics {

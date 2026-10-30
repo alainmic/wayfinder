@@ -20,6 +20,7 @@ import com.droid.wayfinder.data.sortEntries
 import android.app.Activity
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.StarOutline
@@ -270,13 +271,15 @@ private fun Modifier.externalDrop(vm: BrowserViewModel, dest: String): Modifier 
         .then(if (hovering.value) Modifier.border(2.dp, cs.primary, RoundedCornerShape(12.dp)).background(cs.primary.copy(alpha = 0.06f)) else Modifier)
 }
 
-/** Star and color-tag dots shown next to an item's name. */
+/** Pin, star, and color-tag badges shown next to an item's name. */
 @Composable
 fun MarkBadges(s: AppState, path: String, modifier: Modifier = Modifier, dot: Dp = 8.dp, showStar: Boolean = true, showTags: Boolean = true) {
     val starred = showStar && s.marks.isStarred(path)
+    val pinned = showStar && path in s.pins
     val tags = if (showTags) s.marks.tagsOf(path).sortedBy { it.ordinal } else emptyList()
-    if (!starred && tags.isEmpty()) return
+    if (!starred && !pinned && tags.isEmpty()) return
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (pinned) Icon(androidx.compose.material.icons.Icons.Filled.PushPin, "Pinned", Modifier.size(dot + 6.dp), tint = MaterialTheme.colorScheme.primary)
         if (starred) Icon(Icons.Filled.Star, "Starred", Modifier.size(dot + 6.dp), tint = StarColor)
         tags.forEach { t ->
             Box(

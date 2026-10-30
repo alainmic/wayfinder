@@ -943,7 +943,22 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
     }
 
     private fun remapMarks(pairs: List<Pair<String, String>>) {
-        if (pairs.isNotEmpty()) SharedUi.updateMarks { m -> pairs.fold(m) { acc, (a, b) -> acc.renamed(a, b) } }
+        if (pairs.isEmpty()) return
+        SharedUi.updateMarks { m -> pairs.fold(m) { acc, (a, b) -> acc.renamed(a, b) } }
+        val curPins = _state.value.pins
+        if (curPins.isNotEmpty()) {
+            val updatedPins = pairs.fold(curPins) { pins, (from, to) ->
+                if (from == to) pins
+                else pins.map { p ->
+                    when {
+                        p == from -> to
+                        p.startsWith("$from/") -> to + p.substring(from.length)
+                        else -> p
+                    }
+                }.distinct()
+            }
+            if (updatedPins != curPins) setPins(updatedPins)
+        }
     }
 
     fun openPalette() = _state.update { it.copy(paletteOpen = true, quickLook = null, addressEditing = false) }
@@ -1087,6 +1102,23 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
 
     fun togglePin(path: String) { if (path in _state.value.pins) unpin(path) else pin(path) }
 
+    /** Pins all [paths] unless every one is already pinned, in which case they are all unpinned. */
+    fun togglePins(paths: List<String> = markTargets()) {
+        val valid = paths.filter { !FsPath.isVirtual(it) }
+        if (valid.isEmpty()) return
+        if (valid.any { FsPath.isZip(it) }) { toast("Items inside archives can't be pinned"); return }
+        val cur = _state.value.pins
+        if (valid.all { it in cur }) {
+            val next = cur.filter { it !in valid.toSet() }
+            setPins(next)
+            toast(if (valid.size == 1) "Unpinned ${FsPath.name(valid[0])}" else "Unpinned ${valid.size} items")
+        } else {
+            val added = valid.filter { it !in cur }
+            setPins(cur + added)
+            toast(if (added.size == 1) "Pinned ${FsPath.name(added[0])}" else "Pinned ${added.size} items")
+        }
+    }
+
     fun pin(path: String) {
         if (path in _state.value.pins || FsPath.isVirtual(path)) return
         if (FsPath.isZip(path)) { toast("Folders inside archives can't be pinned"); return }
@@ -1094,7 +1126,50 @@ class BrowserViewModel(private val app: Application, handle: SavedStateHandle) :
         toast("Pinned ${FsPath.name(path)}")
     }
 
-    fun unpin(path: String) = setPins(_state.value.pins - path)
+    fun unpin(path: String) {
+        if (path !in _state.value.pins) return
+        setPins(_state.value.pins - path)
+        toast("Unpinned ${FsPath.name(path)}")
+    }
+
+    /** Opens a pinned folder or file from the sidebar (navigates into folders/archives, opens and reveals regular files). */
+    fun openPinned(path: String, newTab: Boolean = false) {
+        if (FsPath.isLocalFile(path)) {
+            val f = File(path)
+            if (f.isFile) {
+                val entry = FileEntry(path = path, name = f.name, isDir = false, size = f.length(), modified = f.lastModified())
+                if (isBrowsableArchive(entry)) {
+                    if (newTab) newTab(FsPath.zipRoot(path), activate = false) else navigate(FsPath.zipRoot(path))
+                } else {
+                    val parent = FsPath.parent(path)
+                    if (newTab && parent != null) {
+                        newTab(parent, activate = true)
+                    } else {
+                        if (parent != null && tab.path != parent) navigate(parent, select = path)
+                        else if (parent != null) updateTab(tab.id) { it.copy(selection = setOf(path), anchor = path, focused = path) }
+                        openFile(path)
+                    }
+                }
+                return
+            }
+            if (newTab) newTab(path, activate = false) else navigate(path)
+            return
+        }
+        if (newTab) {
+            newTab(path, activate = false)
+            return
+        }
+        viewModelScope.launch {
+            val stat = withContext(Dispatchers.IO) { runCatching { repo.fs(path).stat(path) }.getOrNull() }
+            if (stat != null && !stat.isDir) {
+                val parent = FsPath.parent(path)
+                if (parent != null && tab.path != parent) navigate(parent, select = path)
+                openFile(path)
+            } else {
+                navigate(path)
+            }
+        }
+    }
 
     fun movePin(path: String, delta: Int) {
         val l = _state.value.pins.toMutableList()

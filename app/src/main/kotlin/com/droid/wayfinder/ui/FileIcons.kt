@@ -104,13 +104,22 @@ fun FileEntry.tint(): Color = if (isServer || isShare) {
     kind.tint()
 }
 
-fun pinIcon(path: String): ImageVector = when (path.substringAfterLast('/').lowercase()) {
-    "download", "downloads" -> Icons.Outlined.Download
-    "documents" -> Icons.Outlined.Description
-    "pictures", "dcim" -> Icons.Outlined.Image
-    "music" -> Icons.Outlined.MusicNote
-    "movies", "videos" -> Icons.Outlined.Movie
-    else -> Icons.Outlined.Folder
+fun pinIcon(path: String): ImageVector {
+    if (com.droid.wayfinder.data.FsPath.isLocalFile(path) && java.io.File(path).isFile) {
+        return FileKind.fromName(com.droid.wayfinder.data.FsPath.name(path)).icon()
+    }
+    val name = path.substringAfterLast('/')
+    return when (name.lowercase()) {
+        "download", "downloads" -> Icons.Outlined.Download
+        "documents" -> Icons.Outlined.Description
+        "pictures", "dcim" -> Icons.Outlined.Image
+        "music" -> Icons.Outlined.MusicNote
+        "movies", "videos" -> Icons.Outlined.Movie
+        else -> {
+            val kind = FileKind.fromName(name)
+            if (name.contains('.') && kind != FileKind.Other) kind.icon() else Icons.Outlined.Folder
+        }
+    }
 }
 
 fun rootIcon(removable: Boolean): ImageVector = if (removable) Icons.Outlined.SdCard else Icons.Outlined.Laptop
